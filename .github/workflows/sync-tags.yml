@@ -19,7 +19,7 @@ jobs:
 
       - name: Add upstream and fetch its tags
         env:
-          UPSTREAM_URL: https://github.com/espressif/esp-idf
+          UPSTREAM_URL: https://github.com/espressif/esp-idf.git
         run: |
           git remote add upstream "$UPSTREAM_URL"
           git fetch upstream --tags --prune
