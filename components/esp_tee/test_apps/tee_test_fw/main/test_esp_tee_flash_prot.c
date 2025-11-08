@@ -44,14 +44,9 @@ __attribute__((unused)) static const uint32_t mmu_op_fail_seq[8] = {[0 ... 7] = 
 #define CHECK_MMU_OP_FAIL(ptr_) \
     do { \
         TEST_ASSERT_EQUAL_HEX8_ARRAY(mmu_op_fail_seq, (ptr_), 0x20); \
+        printf("Failed MMU operation, rebooting!\n"); \
         esp_restart(); \
     } while (0)
-#endif
-
-#if SOC_TEE_FLASH_OP_FAIL_FAULT
-#define CHECK_FLASH_OP_FAIL(err) TEST_ESP_ERR(ESP_FAIL, err)
-#else
-#define CHECK_FLASH_OP_FAIL(err) do { (void)(err); esp_restart(); } while (0)
 #endif
 
 static const char *TAG = "test_esp_tee_flash_prot";
@@ -146,8 +141,7 @@ static void test_esp_partition_api_r(const esp_partition_t *part)
     TEST_ASSERT_NOT_NULL(part);
     uint8_t buf_r[128];
     memset(buf_r, 0x00, sizeof(buf_r));
-    esp_err_t err = esp_partition_read(part, 0x00, buf_r, sizeof(buf_r));
-    CHECK_FLASH_OP_FAIL(err);
+    esp_partition_read(part, 0x00, buf_r, sizeof(buf_r));
 }
 
 static void test_esp_partition_api_w(const esp_partition_t *part)
@@ -155,15 +149,13 @@ static void test_esp_partition_api_w(const esp_partition_t *part)
     TEST_ASSERT_NOT_NULL(part);
     uint8_t buf_w[128];
     memset(buf_w, 0xA5, sizeof(buf_w));
-    esp_err_t err = esp_partition_write(part, 0x00, buf_w, sizeof(buf_w));
-    CHECK_FLASH_OP_FAIL(err);
+    esp_partition_write(part, 0x00, buf_w, sizeof(buf_w));
 }
 
 static void test_esp_partition_api_e(const esp_partition_t *part)
 {
     TEST_ASSERT_NOT_NULL(part);
-    esp_err_t err = esp_partition_erase_range(part, 0x00, SPI_FLASH_SEC_SIZE);
-    CHECK_FLASH_OP_FAIL(err);
+    esp_partition_erase_range(part, 0x00, SPI_FLASH_SEC_SIZE);
 }
 
 static void test_esp_partition_api(void)
@@ -256,6 +248,7 @@ TEST_CASE("Test REE-TEE isolation: MMU-spillover", "[exception]")
     spi_flash_mmap_handle_t handle;
     const size_t len = 0x100000;  // 1MB
     TEST_ESP_OK(spi_flash_mmap(0x00, len, SPI_FLASH_MMAP_DATA, &ptr, &handle));
+    CHECK_MMU_OP_FAIL(ptr);
     ESP_LOG_BUFFER_HEXDUMP(TAG, ptr, 32, ESP_LOG_INFO);
     TEST_FAIL_MESSAGE("Exception should have been generated!");
 }
@@ -267,22 +260,19 @@ static void test_esp_flash_api_r(uint32_t paddr)
 {
     uint8_t buf_r[128];
     memset(buf_r, 0x00, sizeof(buf_r));
-    esp_err_t err = esp_flash_read(NULL, buf_r, paddr, sizeof(buf_r));
-    CHECK_FLASH_OP_FAIL(err);
+    esp_flash_read(NULL, buf_r, paddr, sizeof(buf_r));
 }
 
 static void test_esp_flash_api_w(uint32_t paddr)
 {
     uint8_t buf_w[128];
     memset(buf_w, 0xA5, sizeof(buf_w));
-    esp_err_t err = esp_flash_write(NULL, buf_w, paddr, sizeof(buf_w));
-    CHECK_FLASH_OP_FAIL(err);
+    esp_flash_write(NULL, buf_w, paddr, sizeof(buf_w));
 }
 
 static void test_esp_flash_api_e(uint32_t paddr)
 {
-    esp_err_t err = esp_flash_erase_region(NULL, paddr, SPI_FLASH_SEC_SIZE);
-    CHECK_FLASH_OP_FAIL(err);
+    esp_flash_erase_region(NULL, paddr, SPI_FLASH_SEC_SIZE);
 }
 
 static void test_esp_flash_api(void)
