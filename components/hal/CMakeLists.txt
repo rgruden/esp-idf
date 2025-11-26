@@ -137,20 +137,12 @@ elseif(NOT BOOTLOADER_BUILD)
         list(APPEND srcs "etm_hal.c" "${target}/etm_periph.c")
     endif()
 
-    if(CONFIG_SOC_PARLIO_SUPPORTED)
-        list(APPEND srcs "parlio_hal.c")
-    endif()
-
     if(CONFIG_SOC_ADC_SUPPORTED)
         list(APPEND srcs "adc_hal_common.c" "adc_oneshot_hal.c")
 
         if(CONFIG_SOC_ADC_DMA_SUPPORTED)
             list(APPEND srcs "adc_hal.c")
         endif()
-    endif()
-
-    if(CONFIG_SOC_MIPI_CSI_SUPPORTED)
-        list(APPEND srcs "mipi_csi_hal.c")
     endif()
 
     if(CONFIG_SOC_ECC_SUPPORTED)
@@ -226,10 +218,6 @@ elseif(NOT BOOTLOADER_BUILD)
     if(CONFIG_SOC_DIG_SIGN_SUPPORTED AND NOT CONFIG_IDF_TARGET_ESP32S2)
         # For ESP32-S2 we do not have DS HAL layer implementation yet
         list(APPEND srcs "ds_hal.c")
-    endif()
-
-    if(CONFIG_SOC_LCDCAM_CAM_SUPPORTED)
-        list(APPEND srcs "cam_hal.c")
     endif()
 
     if(CONFIG_SOC_USB_SERIAL_JTAG_SUPPORTED)
