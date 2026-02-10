@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: 2020-2025 Espressif Systems (Shanghai) CO LTD
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 #pragma once
@@ -22,6 +22,7 @@ typedef enum {
     PERIPH_BT_MODULE,
     PERIPH_WIFI_BT_COMMON_MODULE,
     PERIPH_SYSTIMER_MODULE,
+    PERIPH_PHY_CALIBRATION_MODULE,
     PERIPH_MODULE_MAX
 } shared_periph_module_t;
 

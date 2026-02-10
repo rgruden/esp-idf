@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: 2021-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <string.h>
-#include "soc/soc_caps_full.h"
+#include <stdlib.h>
+#include "soc/soc_caps.h"
 #include "esp_attr.h"
 #include "hal/emac_hal.h"
 #include "hal/emac_ll.h"
@@ -12,6 +13,15 @@
 #include "esp_rom_sys.h"
 #define EMAC_PTP_INIT_TIMEOUT_US (10)
 #endif // SOC_EMAC_IEEE1588V2_SUPPORTED
+
+static uint8_t emac_crs_div_table[] = {
+    42,
+    62,
+    16,
+    26,
+    102,
+    124,
+};
 
 static esp_err_t emac_hal_flush_trans_fifo(emac_hal_context_t *hal)
 {
@@ -37,6 +47,21 @@ void emac_hal_init(emac_hal_context_t *hal)
 #if SOC_EMAC_IEEE1588V2_SUPPORTED
     hal->ptp_regs = &EMAC_PTP;
 #endif
+}
+
+void emac_hal_find_set_closest_csr_clock_range(emac_hal_context_t *hal, int mdc_freq_hz, int freq_hz)
+{
+    int min_diff = abs(freq_hz / emac_crs_div_table[0] - mdc_freq_hz);
+    uint32_t best_div = 0;
+
+    for (int i = 1; i < sizeof(emac_crs_div_table) / sizeof(emac_crs_div_table[0]); i++) {
+        int cur_diff = abs(freq_hz / emac_crs_div_table[i] - mdc_freq_hz);
+        if (cur_diff < min_diff) {
+            min_diff = cur_diff;
+            best_div = i;
+        }
+    }
+    emac_ll_set_csr_clock_division(hal->mac_regs, best_div);
 }
 
 void emac_hal_set_csr_clock_range(emac_hal_context_t *hal, int freq)
@@ -341,6 +366,10 @@ esp_err_t emac_hal_ptp_start(emac_hal_context_t *hal, const emac_hal_ptp_config_
     emac_ll_ts_ptp_ether_enable(hal->ptp_regs, true);
     // Process frames with v2 format
     emac_ll_ptp_v2_proc_enable(hal->ptp_regs, true);
+    // Enable time stamping frame filtering
+    emac_ll_ts_mac_addr_filter_enable(hal->ptp_regs, true);
+    // Process also Pdelay messages
+    emac_ll_ts_ptp_snap_type_sel(hal->ptp_regs, 1);
 
     /* Un-mask the Time stamp trigger interrupt */
     emac_ll_enable_corresponding_emac_intr(hal->mac_regs, EMAC_LL_CONFIG_ENABLE_MAC_INTR_MASK);
@@ -525,6 +554,20 @@ esp_err_t emac_hal_ptp_set_target_time(emac_hal_context_t *hal, uint32_t seconds
 esp_err_t emac_hal_ptp_enable_ts4all(emac_hal_context_t *hal, bool enable)
 {
     emac_ll_ts_all_enable(hal->ptp_regs, enable);
+    return ESP_OK;
+}
+
+esp_err_t emac_hal_set_pps0_out_freq(emac_hal_context_t *hal, uint32_t freq_hz)
+{
+    uint8_t n;
+    if (freq_hz == 0) { // 0 is special case for 1PPS (narrow pulse)
+        n = 0;
+    } else if (!(freq_hz & (freq_hz - 1)) && freq_hz <= 16384) { // is power of two and less than maximum supported frequency
+        n = 1 + __builtin_ctz(freq_hz);
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
+    emac_ll_set_pps0_out_freq(hal->ptp_regs, n);
     return ESP_OK;
 }
 #endif // SOC_EMAC_IEEE1588V2_SUPPORTED

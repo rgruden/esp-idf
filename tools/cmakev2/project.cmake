@@ -85,7 +85,7 @@ function(__init_project_configuration)
 
     idf_build_get_property(idf_ver IDF_VER)
     idf_build_get_property(idf_target IDF_TARGET)
-    idf_build_get_property(components_discovered COMPONENTS_DISCOVERED)
+    idf_build_get_property(component_interfaces COMPONENT_INTERFACES)
     idf_build_get_property(build_dir BUILD_DIR)
     idf_build_get_property(project_dir PROJECT_DIR)
     idf_build_get_property(project_name PROJECT_NAME)
@@ -416,12 +416,6 @@ function(__init_project_configuration)
         list(APPEND link_options "-rtlib=${CONFIG_COMPILER_RT_LIB_NAME}")
     endif()
 
-    if(CONFIG_LIBC_PICOLIBC)
-        list(APPEND c_compile_options "-specs=picolibc.specs")
-        list(APPEND cxx_compile_options "-specs=picolibcpp.specs")
-        list(APPEND link_options "-specs=picolibc.specs")
-    endif()
-
     if("${linker_type}" STREQUAL "GNU")
         set(target_upper "${idf_target}")
         string(TOUPPER ${target_upper} target_upper)
@@ -463,8 +457,9 @@ function(__init_project_configuration)
 
         # Generate mapping for component paths
         set(gdbinit_file_lines)
-        foreach(component_name ${components_discovered})
-            idf_component_get_property(component_dir ${component_name} COMPONENT_DIR)
+        foreach(component_interface ${component_interfaces})
+            __idf_component_get_property_unchecked(component_name ${component_interface} COMPONENT_NAME)
+            __idf_component_get_property_unchecked(component_dir ${component_interface} COMPONENT_DIR)
 
             string(TOUPPER ${component_name} component_name_uppercase)
             set(substituted_path "/COMPONENT_${component_name_uppercase}_DIR")
@@ -575,9 +570,6 @@ macro(idf_project_init)
         # Set PROJECT_VER build property
         __init_project_version()
 
-        # Initialize all compilation options and defines.
-        __init_project_configuration()
-
         # Create global flash targets.
         __create_project_flash_targets()
 
@@ -598,16 +590,21 @@ macro(idf_project_init)
         include("${sdkconfig_cmake}")
         unset(sdkconfig_cmake)
 
+        # Initialize all compilation options and defines.
+        # This must be done after including sdkconfig.cmake
+        __init_project_configuration()
+
         # Initialize the target architecture based on the configuration
         # Ensure this is done after including the sdkconfig.
         __init_idf_target_arch()
 
         # Include all project_include.cmake files for the components that have
         # been discovered.
-        idf_build_get_property(component_names COMPONENTS_DISCOVERED)
-        foreach(component_name IN LISTS component_names)
-            idf_component_get_property(project_include ${component_name} __PROJECT_INCLUDE)
-            idf_component_get_property(component_dir ${component_name} COMPONENT_DIR)
+        idf_build_get_property(component_interfaces COMPONENT_INTERFACES)
+        foreach(component_interface IN LISTS component_interfaces)
+            __idf_component_get_property_unchecked(project_include ${component_interface} __PROJECT_INCLUDE)
+            __idf_component_get_property_unchecked(component_dir ${component_interface} COMPONENT_DIR)
+            __idf_component_get_property_unchecked(component_name ${component_interface} COMPONENT_NAME)
             if(project_include)
                 set(COMPONENT_NAME ${component_name})
                 set(COMPONENT_DIR ${component_dir})
@@ -770,6 +767,8 @@ function(__project_default)
         idf_create_size_report("${executable}_mapfile"
                                TARGET size)
     endif()
+
+    idf_build_generate_depgraph("${executable}")
 endfunction()
 
 #[[api

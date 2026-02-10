@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2018-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2018-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -17,6 +17,7 @@
 
 #include <esp_http_server.h>
 #include "osal.h"
+#include "sdkconfig.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -404,19 +405,6 @@ esp_err_t httpd_req_new(struct httpd_data *hd, struct sock_db *sd);
  */
 esp_err_t httpd_req_delete(struct httpd_data *hd);
 
-/**
- * @brief   For handling HTTP errors by invoking registered
- *          error handler function
- *
- * @param[in] req     Pointer to the HTTP request for which error occurred
- * @param[in] error   Error type
- *
- * @return
- *  - ESP_OK    : error handled successful
- *  - ESP_FAIL  : failure indicates that the underlying socket needs to be closed
- */
-esp_err_t httpd_req_handle_err(httpd_req_t *req, httpd_err_code_t error);
-
 /** End of Group : Parsing
  * @}
  */
@@ -577,9 +565,21 @@ esp_err_t httpd_ws_get_frame_type(httpd_req_t *req);
  */
 esp_err_t httpd_sess_trigger_close_(httpd_handle_t handle, struct sock_db *session);
 
+/**
+ * @brief   Directly closes the least recently used session
+ *
+ * @param[in] hd  Server instance data
+ *
+ * @return
+ *  - ESP_OK    : if session closed successfully
+ */
+esp_err_t httpd_sess_close_lru_direct(struct httpd_data *hd);
+
 /** End of WebSocket related functions
  * @}
  */
+
+#ifdef CONFIG_HTTPD_ENABLE_EVENTS
 
 #if CONFIG_HTTPD_SERVER_EVENT_POST_TIMEOUT == -1
 #define ESP_HTTP_SERVER_EVENT_POST_TIMEOUT portMAX_DELAY
@@ -592,6 +592,16 @@ esp_err_t httpd_sess_trigger_close_(httpd_handle_t handle, struct sock_db *sessi
  *
  */
 void esp_http_server_dispatch_event(int32_t event_id, const void* event_data, size_t event_data_size);
+
+#else // CONFIG_HTTPD_ENABLE_EVENTS
+static inline void esp_http_server_dispatch_event(int32_t event_id, const void* event_data, size_t event_data_size)
+{
+    // Events disabled, do nothing
+    (void) event_id;
+    (void) event_data;
+    (void) event_data_size;
+}
+#endif // CONFIG_HTTPD_ENABLE_EVENTS
 
 esp_err_t httpd_crypto_sha1(const uint8_t *data, size_t data_len, uint8_t *hash);
 

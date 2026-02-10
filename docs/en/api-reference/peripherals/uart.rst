@@ -107,6 +107,8 @@ For more information on how to configure the hardware flow control options, plea
 
     Additionally, :cpp:member:`uart_config_t::allow_pd` can be set to enable the backup of the UART configuration registers before entering sleep and restore these registers after exiting sleep. This allows the UART to continue working properly after waking up even when the UART module power domain is entirely off during sleep. This option implies an balance between power consumption and memory usage. If the power consumption is not a concern, you can disable this option to save memory.
 
+If glitches may occur on the RX signal, :cpp:member:`uart_config_t::rx_glitch_filt_thresh` can be set to filter the glitches to ensure the correct data is received (note that this feature is not supported on ESP32 and ESP32-S2). The unit of the :cpp:member:`uart_config_t::rx_glitch_filt_thresh` is nanoseconds. The default value is 0, which means no filtering.
+
 Multiple Steps
 """"""""""""""
 
@@ -445,6 +447,6 @@ API Reference
 GPIO Lookup Macros
 ^^^^^^^^^^^^^^^^^^
 
-Some UART ports have dedicated IO_MUX pins to which they are connected directly. These can be useful if you need very high UART baud rates, which means you will have to use IO_MUX pins only. In other cases, any GPIO pin can be used for UART communication by routing the signals through the GPIO matrix. If the UART port has dedicated IO_MUX pins, :c:macro:`UART_NUM_x_TXD_DIRECT_GPIO_NUM` and :c:macro:`UART_NUM_x_RXD_DIRECT_GPIO_NUM` can be used to find the corresponding IO_MUX pin numbers.
+Some UART ports have dedicated IO_MUX pins to which they are connected directly. These can be useful if you need very high UART baud rates, which means you will have to use IO_MUX pins only. In other cases, any GPIO pin can be used for UART communication by routing the signals through the GPIO matrix. If the UART port has dedicated IO_MUX pins, :c:macro:`UxTXD_GPIO_NUM` and :c:macro:`UxRXD_GPIO_NUM` can be used to find the corresponding IO_MUX pin numbers.
 
-.. include-build-file:: inc/uart_channel.inc
+.. include-build-file:: inc/uart_pins.inc

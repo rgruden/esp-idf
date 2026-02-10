@@ -16,7 +16,11 @@ extern "C" {
 #include "esp_err.h"
 #include "esp_bit_defs.h"
 
-#define MAX_ECDSA_SUPPORTED_KEY_LEN         32   /*!< Maximum supported size for the ECDSA key */
+#if CONFIG_SECURE_TEE_SEC_STG_SUPPORT_SECP384R1_SIGN
+#define MAX_ECDSA_SUPPORTED_KEY_LEN         48   /*!< Maximum supported size for the ECDSA key (SECP384R1) */
+#else
+#define MAX_ECDSA_SUPPORTED_KEY_LEN         32   /*!< Maximum supported size for the ECDSA key (SECP256R1) */
+#endif /* CONFIG_SECURE_TEE_SEC_STG_SUPPORT_SECP384R1_SIGN */
 #define MAX_AES_SUPPORTED_KEY_LEN           32   /*!< Maximum supported size for the AES key */
 
 #define SEC_STORAGE_FLAG_NONE               0      /*!< No flags */
@@ -29,7 +33,9 @@ extern "C" {
 typedef enum {
     ESP_SEC_STG_KEY_AES256 = 0,
     ESP_SEC_STG_KEY_ECDSA_SECP256R1 = 1,
-    ESP_SEC_STG_KEY_ECDSA_SECP192R1 = 2,
+#if SOC_ECDSA_SUPPORT_CURVE_P384
+    ESP_SEC_STG_KEY_ECDSA_SECP384R1 = 3,
+#endif /* SOC_ECDSA_SUPPORT_CURVE_P384 */
     ESP_SEC_STG_TYPE_MAX,
 } esp_tee_sec_storage_type_t;
 
@@ -79,8 +85,7 @@ typedef struct {
  *
  */
 typedef struct {
-    uint8_t sign_r[MAX_ECDSA_SUPPORTED_KEY_LEN];    /*!< R component */
-    uint8_t sign_s[MAX_ECDSA_SUPPORTED_KEY_LEN];    /*!< S component */
+    uint8_t signature[MAX_ECDSA_SUPPORTED_KEY_LEN * 2];    /*!< Signature */
 } __attribute__((__packed__)) esp_tee_sec_storage_ecdsa_sign_t;
 
 #if ESP_TEE_BUILD && !(__DOXYGEN__)

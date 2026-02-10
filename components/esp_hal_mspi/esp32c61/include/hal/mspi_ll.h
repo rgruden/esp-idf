@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2024-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2024-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -32,11 +32,30 @@
 extern "C" {
 #endif
 
+#define MSPI_LL_PERIPH_NUM                            2
 #define MSPI_TIMING_LL_MSPI_ID_0                      0
 #define MSPI_TIMING_LL_MSPI_ID_1                      1
 #define MSPI_LL_CORE_CLOCK_80_MHZ                     80
 #define MSPI_LL_CORE_CLOCK_120_MHZ                    120
 #define MSPI_TIMING_LL_CORE_CLOCK_MHZ_DEFAULT         MSPI_LL_CORE_CLOCK_80_MHZ
+
+// PSRAM frequency should be constrained by AXI frequency to avoid FIFO underflow.
+#define MSPI_TIMING_LL_PSRAM_FREQ_AXI_CONSTRAINED     1
+
+#define MSPI_LL_EVENT_SLV_ST_END                      (1<<3)
+#define MSPI_LL_EVENT_MST_ST_END                      (1<<4)
+#define MSPI_LL_EVENT_ECC_ERR                         (1<<5)
+#define MSPI_LL_EVENT_PMS_REJECT                      (1<<6)
+#define MSPI_LL_EVENT_AXI_RADDR_ERR                   (1<<7)
+#define MSPI_LL_EVENT_AXI_WR_FLASH_ERR                (1<<8)
+#define MSPI_LL_EVENT_AXI_WADDR_ERR                   (1<<9)
+#define MSPI_LL_EVENT_MASK                            (MSPI_LL_EVENT_ECC_ERR | MSPI_LL_EVENT_PMS_REJECT | MSPI_LL_EVENT_AXI_RADDR_ERR | \
+                                                       MSPI_LL_EVENT_AXI_WR_FLASH_ERR | MSPI_LL_EVENT_AXI_WADDR_ERR)
+
+#define MSPI_LL_ADDR_INT_SUPPORTED                    1
+#define MSPI_LL_PMS_INT_SUPPORTED                     1
+#define MSPI_LL_INTR_EVENT_SUPPORTED                  1
+#define MSPI_LL_INTR_SHARED                           1
 
 /************************** MSPI pll clock configurations **************************/
 
@@ -224,6 +243,18 @@ static inline void mspi_timing_ll_set_flash_extra_dummy(uint8_t mspi_id, uint8_t
         SET_PERI_REG_BITS(SPI_MEM_TIMING_CALI_REG(mspi_id), SPI_MEM_EXTRA_DUMMY_CYCLELEN_V, 0, SPI_MEM_EXTRA_DUMMY_CYCLELEN_S);
     }
     REG_SET_BIT(SPI_MEM_TIMING_CALI_REG(MSPI_TIMING_LL_MSPI_ID_0), SPI_MEM_TIMING_CALI_UPDATE);
+}
+
+/**
+ * Set MSPI Flash user dummy
+ *
+ * @param mspi_id      SPI0 / SPI1
+ * @param user_dummy   user dummy
+ */
+__attribute__((always_inline))
+static inline void mspi_timing_ll_set_flash_user_dummy(uint8_t mspi_id, uint8_t user_dummy)
+{
+    REG_SET_FIELD(SPI_MEM_USER1_REG(mspi_id), SPI_MEM_USR_DUMMY_CYCLELEN, user_dummy);
 }
 
 /**
@@ -424,6 +455,46 @@ static inline void mspi_timing_ll_get_psram_dummy(uint8_t mspi_id, int *usr_rdum
 {
     *usr_rdummy = REG_GET_FIELD(SPI_MEM_CACHE_SCTRL_REG(mspi_id), SPI_MEM_SRAM_RDUMMY_CYCLELEN);
     *extra_dummy = REG_GET_FIELD(SPI_SMEM_TIMING_CALI_REG(mspi_id), SPI_SMEM_EXTRA_DUMMY_CYCLELEN);
+}
+
+/**
+ * @brief Enable/Disable MSPI controller interrupt
+ *
+ * @param mspi_id     mspi_id
+ * @param intr_mask   interrupt mask
+ * @param enable      enable / disable
+ */
+__attribute__((always_inline))
+static inline void mspi_ll_enable_intr(uint8_t spi_num, uint32_t intr_mask, bool enable)
+{
+    if (enable) {
+        SPIMEM0.mem_int_ena.val |= intr_mask;
+    } else {
+        SPIMEM0.mem_int_ena.val &= ~intr_mask;
+    }
+}
+
+/**
+ * @brief Clear MSPI controller interrupt
+ *
+ * @param mspi_id     mspi_id
+ * @param intr_mask   interrupt mask
+ */
+__attribute__((always_inline))
+static inline void mspi_ll_clear_intr(uint8_t spi_num, uint32_t intr_mask)
+{
+    SPIMEM0.mem_int_clr.val = intr_mask;
+}
+
+/**
+ * @brief Get MSPI controller interrupt raw
+ *
+ * @param mspi_id     mspi_id
+ */
+__attribute__((always_inline))
+static inline uint32_t mspi_ll_get_intr_raw(uint8_t spi_num)
+{
+    return SPIMEM0.mem_int_raw.val;
 }
 
 #ifdef __cplusplus

@@ -18,7 +18,9 @@
 extern "C" {
 #endif
 
+#if CONFIG_ESP_HTTPS_SERVER_EVENTS || __DOXYGEN__
 ESP_EVENT_DECLARE_BASE(ESP_HTTPS_SERVER_EVENT);
+#endif // CONFIG_ESP_HTTPS_SERVER_EVENTS || __DOXYGEN__
 
 typedef enum {
     HTTPS_SERVER_EVENT_ERROR = 0,       /*!< This event occurs when there are any errors during execution */
@@ -37,11 +39,12 @@ typedef enum {
 
 /**
  * @brief Indicates the state at which the user callback is executed,
- *        i.e at session creation or session close
+ *        i.e at session creation, session close, or session error
  */
 typedef enum {
     HTTPD_SSL_USER_CB_SESS_CREATE,
-    HTTPD_SSL_USER_CB_SESS_CLOSE
+    HTTPD_SSL_USER_CB_SESS_CLOSE,
+    HTTPD_SSL_USER_CB_SESS_ERROR
 } httpd_ssl_user_cb_state_t;
 
 typedef esp_tls_handshake_callback esp_https_server_cert_select_cb;

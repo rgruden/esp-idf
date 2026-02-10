@@ -8,7 +8,7 @@ menu "Bootloader config"
         hex
         default 0x1000 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2
         # the first 2 sectors are reserved for the key manager with AES-XTS (flash encryption) purpose
-        default 0x2000 if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32C5 || IDF_TARGET_ESP32H4
+        default 0x2000 if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32C5 || IDF_TARGET_ESP32H4 || IDF_TARGET_ESP32S31
         default 0x0
         help
             Offset address that 2nd bootloader will be flashed to.
@@ -41,8 +41,8 @@ menu "Bootloader config"
 
     config BOOTLOADER_CPU_CLK_FREQ_MHZ
         int
-        default 64 if IDF_TARGET_ESP32H2
-        default 48 if IDF_TARGET_ESP32H21 || IDF_TARGET_ESP32H4
+        default 48 if IDF_TARGET_ESP32H21
+        default 64 if IDF_TARGET_ESP32H2 || IDF_TARGET_ESP32H4
         default 90 if IDF_TARGET_ESP32P4 && ESP32P4_SELECTS_REV_LESS_V3
         default 100 if IDF_TARGET_ESP32P4 && !ESP32P4_SELECTS_REV_LESS_V3
         default 80
@@ -175,6 +175,7 @@ menu "Bootloader config"
         range 0 30 if IDF_TARGET_ESP32C6
         range 0 27 if IDF_TARGET_ESP32H2
         range 0 54 if IDF_TARGET_ESP32P4
+        range 0 62 if IDF_TARGET_ESP32S31
         default 4
         help
             The selected GPIO will be configured as an input with internal pull-up enabled. To trigger a factory
@@ -1048,6 +1049,20 @@ menu "Security features"
                 first boot. If set, the UART bootloader will still be able to access the flash cache.
 
                 Only set this option in testing environments.
+
+        config SECURE_BOOT_REQUIRE_ALREADY_ENABLED
+            bool "Require secure boot to be already enabled"
+            depends on SECURE_BOOT_INSECURE
+            default n
+            help
+                If not set (default), and secure boot is not yet enabled in eFuses, the 2nd stage bootloader
+                will enable secure boot: generate the secure boot digest and program eFuses.
+                If this option is set, and secure boot is not yet enabled, the bootloader will error out and
+                reboot.
+                If secure boot is enabled in eFuses, this option does not change the bootloader behavior.
+
+                Only use this option in testing environments, to avoid accidentally enabling secure boot on
+                the wrong device. The device needs to have secure boot already enabled using espefuse.
 
         config SECURE_FLASH_REQUIRE_ALREADY_ENABLED
             bool "Require flash encryption to be already enabled"

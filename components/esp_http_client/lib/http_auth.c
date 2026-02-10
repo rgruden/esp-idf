@@ -20,6 +20,8 @@
 #include "http_auth.h"
 #include "http_crypto.h"
 
+#include "psa/crypto.h"
+
 #define MD5_MAX_LEN (33)
 #define HTTP_AUTH_BUF_LEN (1024)
 
@@ -70,7 +72,6 @@ static int md5_printf(char *md, const char *fmt, ...)
  */
 static int sha256_sprintf(char *sha, const char *fmt, ...)
 {
-
     unsigned char *buf;
     unsigned char digest[SHA256_LEN];
     int len, i;
@@ -83,9 +84,22 @@ static int sha256_sprintf(char *sha, const char *fmt, ...)
     }
 
     int ret = 0;
+    psa_status_t status;
+    psa_hash_operation_t operation = PSA_HASH_OPERATION_INIT;
 
-    esp_err_t err = http_crypto_sha256(buf, len, digest);
-    if (err != ESP_OK) {
+    status = psa_hash_setup(&operation, PSA_ALG_SHA_256);
+    if (status != PSA_SUCCESS) {
+        goto exit;
+    }
+
+    status = psa_hash_update(&operation, buf, len);
+    if (status != PSA_SUCCESS) {
+        goto exit;
+    }
+
+    size_t hash_length;
+    status = psa_hash_finish(&operation, digest, sizeof(digest), &hash_length);
+    if (status != PSA_SUCCESS || hash_length != SHA256_LEN) {
         goto exit;
     }
 
@@ -97,6 +111,7 @@ static int sha256_sprintf(char *sha, const char *fmt, ...)
 
 exit:
     free(buf);
+    psa_hash_abort(&operation);
     va_end(ap);
     return ret;
 }
@@ -113,14 +128,15 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
             password == NULL ||
             auth_data->nonce == NULL ||
             auth_data->uri == NULL ||
-            auth_data->realm == NULL) {
+            auth_data->realm == NULL ||
+            auth_data->algorithm == NULL) {
         return NULL;
     }
 
     int digest_size = MD5_MAX_LEN;
     int (*digest_func)(char *digest, const char *fmt, ...) = md5_printf;
-    if (!memcmp(auth_data->algorithm, "SHA256", strlen("SHA256")) ||
-            !memcmp(auth_data->algorithm, "SHA-256", strlen("SHA-256"))) {
+    if (strcasecmp(auth_data->algorithm, "SHA256") == 0 ||
+            strcasecmp(auth_data->algorithm, "SHA-256") == 0) {
         digest_size = SHA256_HEX_LEN;
         digest_func = sha256_sprintf;
     }
@@ -140,8 +156,7 @@ char *http_auth_digest(const char *username, const char *password, esp_http_auth
 
     ESP_LOGD(TAG, "%s %s %s %s", "Digest", username, auth_data->realm, password);
     if ((strcasecmp(auth_data->algorithm, "md5-sess") == 0) ||
-            (strcasecmp(auth_data->algorithm, "SHA256") == 0) ||
-            (strcasecmp(auth_data->algorithm, "md5-sess") == 0)) {
+            (strcasecmp(auth_data->algorithm, "SHA-256-sess") == 0)) {
         if (digest_func(ha1, "%s:%s:%016llx", ha1, auth_data->nonce, auth_data->cnonce) <= 0) {
             goto _digest_exit;
         }

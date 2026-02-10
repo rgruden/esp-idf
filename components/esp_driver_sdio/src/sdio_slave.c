@@ -78,9 +78,8 @@ The driver of FIFOs works as below:
 #include <string.h>
 
 #include "soc/soc_memory_layout.h"
-#include "soc/gpio_periph.h"
 #include "soc/soc_caps.h"
-#include "soc/sdio_slave_periph.h"
+#include "hal/sdio_slave_periph.h"
 #include "esp_cpu.h"
 #include "esp_intr_alloc.h"
 #include "esp_log.h"
@@ -104,12 +103,6 @@ static const char TAG[] = "sdio_slave";
 
 #define SDIO_SLAVE_LOGE(s, ...) ESP_LOGE(TAG, "%s(%d): "s, __FUNCTION__,__LINE__,##__VA_ARGS__)
 #define SDIO_SLAVE_LOGW(s, ...) ESP_LOGW(TAG, "%s: "s, __FUNCTION__,##__VA_ARGS__)
-
-#if !SOC_RCC_IS_INDEPENDENT
-#define SDIO_SLAVE_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define SDIO_SLAVE_RCC_ATOMIC()
-#endif
 
 // sdio_slave_buf_handle_t is of type recv_desc_t*;
 typedef struct recv_desc_s {
@@ -313,7 +306,7 @@ static inline esp_err_t sdio_slave_hw_init(sdio_slave_config_t *config)
     configure_pin(slot->d3_gpio, slot->func, pullup);
 
     //enable register clock
-    SDIO_SLAVE_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         sdio_slave_ll_enable_bus_clock(true);
         sdio_slave_ll_reset_register();
     }
@@ -346,7 +339,7 @@ static void sdio_slave_hw_deinit(void)
     recover_pin(slot->d3_gpio, slot->func);
 
     //disable register clock
-    SDIO_SLAVE_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         sdio_slave_ll_enable_bus_clock(false);
     }
 }
@@ -504,7 +497,7 @@ static void sdio_intr_host(void *arg)
     }
 }
 
-esp_err_t sdio_slave_wait_int(int pos, TickType_t wait)
+esp_err_t sdio_slave_wait_int(int pos, uint32_t wait)
 {
     SDIO_SLAVE_CHECK(pos >= 0 && pos < 8, "interrupt num invalid", ESP_ERR_INVALID_ARG);
     return xSemaphoreTake(context.events[pos], wait);
@@ -616,9 +609,9 @@ static void sdio_intr_send(void *arg)
     }
 }
 
-esp_err_t sdio_slave_send_queue(uint8_t *addr, size_t len, void *arg, TickType_t wait)
+esp_err_t sdio_slave_send_queue(uint8_t *addr, size_t len, void *arg, uint32_t wait)
 {
-    SDIO_SLAVE_CHECK(len > 0, "len <= 0", ESP_ERR_INVALID_ARG);
+    SDIO_SLAVE_CHECK(len > 0 && len <= 4092, "length out of range: (0, 4092]", ESP_ERR_INVALID_ARG);
     SDIO_SLAVE_CHECK(esp_ptr_dma_capable(addr) && (uint32_t)addr % 4 == 0, "buffer to send should be DMA capable and 32-bit aligned",
                      ESP_ERR_INVALID_ARG);
 
@@ -637,7 +630,7 @@ esp_err_t sdio_slave_send_queue(uint8_t *addr, size_t len, void *arg, TickType_t
     return ESP_OK;
 }
 
-esp_err_t sdio_slave_send_get_finished(void **out_arg, TickType_t wait)
+esp_err_t sdio_slave_send_get_finished(void **out_arg, uint32_t wait)
 {
     void *arg = NULL;
     BaseType_t err = xQueueReceive(context.ret_queue, &arg, wait);
@@ -784,7 +777,7 @@ sdio_slave_buf_handle_t sdio_slave_recv_register_buf(uint8_t *start)
     return desc;
 }
 
-esp_err_t sdio_slave_recv(sdio_slave_buf_handle_t *handle_ret, uint8_t **out_addr, size_t *out_len, TickType_t wait)
+esp_err_t sdio_slave_recv(sdio_slave_buf_handle_t *handle_ret, uint8_t **out_addr, size_t *out_len, uint32_t wait)
 {
     esp_err_t ret = sdio_slave_recv_packet(handle_ret, wait);
     if (ret == ESP_ERR_NOT_FINISHED) {
@@ -803,7 +796,7 @@ esp_err_t sdio_slave_recv(sdio_slave_buf_handle_t *handle_ret, uint8_t **out_add
     return ret;
 }
 
-esp_err_t sdio_slave_recv_packet(sdio_slave_buf_handle_t *handle_ret, TickType_t wait)
+esp_err_t sdio_slave_recv_packet(sdio_slave_buf_handle_t *handle_ret, uint32_t wait)
 {
     SDIO_SLAVE_CHECK(handle_ret != NULL, "handle address cannot be 0", ESP_ERR_INVALID_ARG);
     BaseType_t err = xSemaphoreTake(context.recv_event, wait);

@@ -3,6 +3,73 @@ System
 
 :link_to_translation:`zh_CN:[中文]`
 
+Default LibC changed from Newlib to PicolibC
+--------------------------------------------
+
+Since ESP-IDF v6.0, the default LibC used in builds has switched to the PicolibC implementation.
+
+.. note::
+
+    PicolibC is a Newlib fork with a rewritten stdio implementation whose goal is to consume less memory.
+
+In most cases, no application behavior changes are expected, except for reduced binary size and less stack consumption on I/O operations.
+
+.. warning::
+
+    **Breaking change:** It is not possible to redefine stdin, stdout, and stderr for specific tasks as was possible with Newlib. These streams are global and shared between all tasks. This is POSIX-standardized behavior.
+
+:ref:`CONFIG_LIBC_PICOLIBC_NEWLIB_COMPATIBILITY`, which is enabled by default, provides limited compatibility with Newlib by providing thread-local copies of ``global stdin``, ``stdout``, ``stderr``, and the ``getreent()`` implementation. If a library built with Newlib headers operates with "internal" fields of "struct reent", there may be task stack corruption. Note that manipulating ``struct reent`` fields is expected only by the Newlib library itself.
+
+If you are not linking against external libraries built against Newlib headers, you may disable :ref:`CONFIG_LIBC_PICOLIBC_NEWLIB_COMPATIBILITY` to save a small amount of memory.
+
+Newlib is still maintained in ESP-IDF toolchains. To switch to using it, select Newlib in menuconfig via the option LIBC_NEWLIB in :ref:`CONFIG_LIBC`.
+
+Comparison of Newlib vs Picolibc
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are a small example that shows the motivation of switching to Picolibc:
+
+.. code-block:: c
+
+    FILE *f = fopen("/dev/console", "w");
+    for (int i = 0; i < 10; i++)
+    {
+        fprintf(f, "hello world %s\n", "🤖");
+        fprintf(f, "%.1000f\n", 3.141592653589793);
+        fprintf(f, "%1000d\n", 42);
+    }
+
+The test code was compiled with both Newlib and Picolibc, and the results were compared on ESP32-C3:
+
+.. list-table:: Comparison of Newlib vs Picolibc
+   :header-rows: 1
+   :widths: 30 20 20 20
+
+   * - Metric
+     - Newlib
+     - Picolibc
+     - Difference
+   * - Binary size (bytes)
+     - 280,128
+     - 224,656
+     - 19.80%
+   * - Stack usage (bytes)
+     - 1,748
+     - 802
+     - 54.12%
+   * - Heap usage (bytes)
+     - 1,652
+     - 376
+     - 77.24%
+   * - Performance (CPU cycles)
+     - 278,232,026
+     - 279,823,800
+     - 0.59%
+
+.. note::
+
+    Even when :ref:`CONFIG_LIBC_NEWLIB_NANO_FORMAT` is enabled, which disables float formatting, applications with Picolibc are still smaller by 6% (224,592 vs 239,888 bytes).
+
 Xtensa
 ------
 
@@ -39,6 +106,67 @@ Update to:
     if (causes & BIT(ESP_SLEEP_WAKEUP_TIMER)) {
         handle_timer_wakeup();
     }
+
+.. _gpio_wakeup_api_changes:
+
+GPIO Wakeup API Changes
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following APIs and types have been removed and replaced with new ones that support both Deep Sleep and Light Sleep (when peripheral power domain is powered down):
+
+**Removed APIs:**
+
+- :func:`esp_deep_sleep_enable_gpio_wakeup` - Use :func:`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown` instead
+- :func:`gpio_deep_sleep_wakeup_enable` - Use :func:`gpio_wakeup_enable_on_hp_periph_powerdown_sleep` instead
+- :func:`gpio_deep_sleep_wakeup_disable` - Use :func:`gpio_wakeup_disable_on_hp_periph_powerdown_sleep` instead
+
+**Removed Types:**
+
+- :cpp:type:`esp_deepsleep_gpio_wake_up_mode_t` - Use :cpp:type:`esp_sleep_gpio_wake_up_mode_t` instead
+
+**Removed Macros:**
+
+- ``GPIO_IS_DEEP_SLEEP_WAKEUP_VALID_GPIO()`` - Use ``GPIO_IS_HP_PERIPH_PD_WAKEUP_VALID_IO()`` instead
+
+**Migration Example:**
+
+Old code:
+
+.. code-block:: c
+
+    #include "esp_sleep.h"
+    #include "driver/gpio.h"
+
+    // Enable GPIO wakeup for deep sleep
+    esp_deep_sleep_enable_gpio_wakeup(BIT(GPIO_NUM_0), ESP_GPIO_WAKEUP_GPIO_LOW);
+
+    // Or using GPIO driver API
+    gpio_deep_sleep_wakeup_enable(GPIO_NUM_0, GPIO_INTR_LOW_LEVEL);
+
+    // Check if GPIO is valid for deep sleep wakeup
+    if (GPIO_IS_DEEP_SLEEP_WAKEUP_VALID_GPIO(GPIO_NUM_0)) {
+        // ...
+    }
+
+New code:
+
+.. code-block:: c
+
+    #include "esp_sleep.h"
+    #include "driver/gpio.h"
+
+    // Enable GPIO wakeup for deep sleep or light sleep (when peripheral power domain is powered down)
+    esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown(BIT(GPIO_NUM_0), ESP_GPIO_WAKEUP_GPIO_LOW);
+
+    // Or using GPIO driver API
+    gpio_wakeup_enable_on_hp_periph_powerdown_sleep(GPIO_NUM_0, GPIO_INTR_LOW_LEVEL);
+
+    // Check if GPIO is valid for wakeup on peripheral powerdown sleep
+    if (GPIO_IS_HP_PERIPH_PD_WAKEUP_VALID_IO(GPIO_NUM_0)) {
+        // ...
+    }
+
+**Note:** The new APIs work for both Deep Sleep and Light Sleep modes when the peripheral power domain is powered down (``PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP`` enabled in menuconfig).
 
 Bootloader
 ----------
@@ -305,9 +433,9 @@ The LP-Core will now wake up the main CPU when it encounters an exception during
 Heap
 ----
 
-In previous versions of ESP-IDF, the capability MALLOC_CAP_EXEC would be available regardless of the memory protection configuration state. This implied that a call to e.g., :cpp:func:`heap_caps_malloc` with MALLOC_CAP_EXEC would return NULL when CONFIG_ESP_SYSTEM_MEMPROT_FEATURE or CONFIG_ESP_SYSTEM_PMP_IDRAM_SPLIT are enabled.
+In previous versions of ESP-IDF, the capability ``MALLOC_CAP_EXEC`` would be available regardless of the memory protection configuration state. This implied that a call to e.g., :cpp:func:`heap_caps_malloc` with ``MALLOC_CAP_EXEC`` would return NULL when ``CONFIG_ESP_SYSTEM_MEMPROT_FEATURE`` or ``CONFIG_ESP_SYSTEM_PMP_IDRAM_SPLIT`` are enabled.
 
-Since ESP-IDF v6.0, the definition of MALLOC_CAP_EXEC is conditional, meaning that if CONFIG_ESP_SYSTEM_MEMPROT is enabled, MALLOC_CAP_EXEC will not be defined. Therefore, using it will generate a compile time error.
+Since ESP-IDF v6.0, the definition of ``MALLOC_CAP_EXEC`` is conditional, meaning that if CONFIG_ESP_SYSTEM_MEMPROT is enabled, ``MALLOC_CAP_EXEC`` will not be defined. Therefore, using it will generate a compile time error.
 
 ``esp_common``
 --------------

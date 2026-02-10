@@ -27,7 +27,7 @@
 #include "soc/soc_caps.h"
 #include "soc/soc.h"
 #include "soc/io_mux_reg.h"
-#include "soc/twai_periph.h"
+#include "hal/twai_periph.h"
 #include "hal/twai_hal.h"
 #include "hal/twai_ll.h"
 #include "esp_rom_gpio.h"
@@ -57,18 +57,6 @@
 
 #define ALERT_LOG_LEVEL_WARNING     TWAI_ALERT_ARB_LOST  //Alerts above and including this level use ESP_LOGW
 #define ALERT_LOG_LEVEL_ERROR       TWAI_ALERT_TX_FAILED //Alerts above and including this level use ESP_LOGE
-
-#if !SOC_RCC_IS_INDEPENDENT
-#define TWAI_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define TWAI_RCC_ATOMIC()
-#endif
-
-#if SOC_PERIPH_CLK_CTRL_SHARED
-#define TWAI_PERI_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define TWAI_PERI_ATOMIC()
-#endif
 
 #define TWAI_USE_RETENTION_LINK  (SOC_TWAI_SUPPORT_SLEEP_RETENTION && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP)
 
@@ -139,7 +127,7 @@ static void twai_alert_handler(twai_obj_t *p_twai_obj, uint32_t alert_code, int 
 
 static inline void twai_handle_rx_buffer_frames(twai_obj_t *p_twai_obj, BaseType_t *task_woken, int *alert_req)
 {
-#ifdef SOC_TWAI_SUPPORTS_RX_STATUS
+#if TWAI_LL_SUPPORT(RX_STATUS)
     uint32_t msg_count = twai_hal_get_rx_msg_count(p_twai_obj->hal);
 
     for (uint32_t i = 0; i < msg_count; i++) {
@@ -158,7 +146,7 @@ static inline void twai_handle_rx_buffer_frames(twai_obj_t *p_twai_obj, BaseType
             twai_alert_handler(p_twai_obj, TWAI_ALERT_RX_FIFO_OVERRUN, alert_req);
         }
     }
-#else   //SOC_TWAI_SUPPORTS_RX_STATUS
+#else
     uint32_t msg_count = twai_hal_get_rx_msg_count(p_twai_obj->hal);
     bool overrun = false;
     //Clear all valid RX frames
@@ -183,7 +171,7 @@ static inline void twai_handle_rx_buffer_frames(twai_obj_t *p_twai_obj, BaseType
         p_twai_obj->rx_overrun_count += twai_hal_clear_rx_fifo_overrun(p_twai_obj->hal);
         twai_alert_handler(p_twai_obj, TWAI_ALERT_RX_FIFO_OVERRUN, alert_req);
     }
-#endif  //SOC_TWAI_SUPPORTS_RX_STATUS
+#endif // TWAI_LL_SUPPORT(RX_STATUS)
 }
 
 static inline void twai_handle_tx_buffer_frame(twai_obj_t *p_twai_obj, bool tx_success, BaseType_t *task_woken, int *alert_req)
@@ -232,7 +220,7 @@ static void twai_intr_handler_main(void *arg)
     if (events & TWAI_HAL_EVENT_NEED_PERIPH_RESET) {
         ESP_EARLY_LOGD(TWAI_TAG, "Triggered peripheral reset");
         twai_hal_prepare_for_reset(p_twai_obj->hal);
-        TWAI_RCC_ATOMIC() {
+        PERIPH_RCC_ATOMIC() {
             twai_ll_reset_register(p_twai_obj->controller_id);
         }
         twai_hal_recover_from_reset(p_twai_obj->hal);
@@ -429,7 +417,7 @@ static esp_err_t twai_alloc_driver_obj(const twai_general_config_t *g_config, tw
     p_obj->hal = (twai_hal_context_t *)(p_obj + 1);   //hal context is place at end of driver context
 
 #if CONFIG_PM_ENABLE
-#if SOC_TWAI_CLK_SUPPORT_APB
+#if TWAI_LL_SUPPORT(APB_CLK)
     // DFS can change APB frequency. So add lock to prevent sleep and APB freq from changing
     if (clk_src == TWAI_CLK_SRC_APB) {
         // TODO: pm_lock name should also reflect the controller ID
@@ -444,7 +432,7 @@ static esp_err_t twai_alloc_driver_obj(const twai_general_config_t *g_config, tw
     if (ret != ESP_OK) {
         goto err;
     }
-#endif //SOC_TWAI_CLK_SUPPORT_APB
+#endif // TWAI_LL_SUPPORT(APB_CLK)
 #endif //CONFIG_PM_ENABLE
 
 #if TWAI_USE_RETENTION_LINK
@@ -547,11 +535,11 @@ esp_err_t twai_driver_install_v2(const twai_general_config_t *g_config, const tw
     portEXIT_CRITICAL(&g_spinlock);
 
     //Enable TWAI peripheral register clock
-    TWAI_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         twai_ll_enable_bus_clock(controller_id, true);
         twai_ll_reset_register(controller_id);
     }
-    TWAI_PERI_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         //Enable functional clock
         twai_ll_set_clock_source(p_twai_obj->controller_id, clk_src);
         twai_ll_enable_clock(p_twai_obj->controller_id, true);
@@ -622,10 +610,10 @@ esp_err_t twai_driver_uninstall_v2(twai_handle_t handle)
 
     //Clear registers by reading
     twai_hal_deinit(p_twai_obj->hal);
-    TWAI_PERI_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         twai_ll_enable_clock(controller_id, false);
     }
-    TWAI_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         twai_ll_enable_bus_clock(controller_id, false);
     }
 
@@ -817,7 +805,7 @@ esp_err_t twai_receive_v2(twai_handle_t handle, twai_message_t *message, TickTyp
 
     //Decode frame
     twai_frame_header_t header = {0};
-    twai_hal_parse_frame(&rx_frame, &header, message->data, TWAI_FRAME_MAX_LEN);
+    twai_hal_parse_frame(p_twai_obj->hal, &rx_frame, &header, message->data, TWAI_FRAME_MAX_LEN);
     message->identifier = header.id;
     message->data_length_code = header.dlc;
     message->extd = header.ide;

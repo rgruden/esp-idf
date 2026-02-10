@@ -9,9 +9,10 @@ if(${target} STREQUAL "linux")
     return()
 endif()
 
-set(requires esp_hal_dma esp_hal_usb)
+set(requires esp_hal_gpio esp_hal_usb esp_hal_pmu)
 # only esp_hw_support/adc_share_hw_ctrl.c requires efuse component
-set(priv_requires efuse spi_flash bootloader_support esp_hal_wdt)
+set(priv_requires efuse spi_flash bootloader_support esp_hal_wdt esp_hal_rtc_timer
+    esp_hal_clock esp_hal_security)
 
 set(srcs "cpu.c" "port/${IDF_TARGET}/esp_cpu_intr.c" "esp_memory_utils.c" "port/${IDF_TARGET}/cpu_region_protect.c")
 if(NOT non_os_build)
@@ -28,8 +29,6 @@ if(NOT non_os_build)
                      "sar_tsens_ctrl.c"
                      "port/${target}/io_mux.c"
                      "port/${target}/esp_clk_tree.c"
-                     "dma/esp_dma_utils.c"
-                     "dma/gdma_link.c"
                      "spi_bus_lock.c"
                      "clk_utils.c")
     if(CONFIG_SOC_USB_OTG_SUPPORTED)
@@ -59,6 +58,7 @@ if(NOT non_os_build)
     if(CONFIG_SOC_LIGHT_SLEEP_SUPPORTED)
         list(APPEND srcs "sleep_modem.c"
                          "sleep_modes.c"
+                         "sleep_uart.c"
                          "sleep_console.c"
                          "sleep_mspi.c"
                          "sleep_usb.c"
@@ -67,34 +67,23 @@ if(NOT non_os_build)
             )
         if(CONFIG_SOC_PAU_SUPPORTED AND CONFIG_SOC_PM_SUPPORT_TOP_PD)
             list(APPEND srcs "sleep_system_peripheral.c")
+            list(APPEND srcs "port/${target}/peripheral_domain_pd.c")
         endif()
     endif()
 
     # [refactor-todo]
     list(APPEND priv_requires esp_driver_gpio   # for GPIO and RTC (by sleep_gpio and sleep_modes)
                               esp_timer
+                              esp_hal_touch_sens # for touch sensor wakeup (introduced in sleep_modes.c)
                               esp_pm)
 
     list(APPEND priv_requires esp_mm
                               esp_hal_mspi
-                              esp_hal_i2s  # required by `sleep_system_peripheral.c`
+                              esp_hal_uart
     )
 
     if(CONFIG_IDF_TARGET_ESP32 OR CONFIG_IDF_TARGET_ESP32S2)
         list(APPEND srcs "rtc_wdt.c")
-    endif()
-
-    if(CONFIG_SOC_GDMA_SUPPORTED)
-        list(APPEND srcs "dma/gdma.c")
-        if(CONFIG_SOC_GDMA_SUPPORT_SLEEP_RETENTION AND CONFIG_SOC_PAU_SUPPORTED)
-            list(APPEND srcs "dma/gdma_sleep_retention.c")
-        endif()
-        if(CONFIG_SOC_GDMA_SUPPORT_ETM)
-            list(APPEND srcs "dma/gdma_etm.c")
-        endif()
-        if(CONFIG_SOC_GDMA_SUPPORT_CRC)
-            list(APPEND srcs "dma/gdma_crc.c")
-        endif()
     endif()
 
     if(CONFIG_SOC_GP_LDO_SUPPORTED)
@@ -103,24 +92,6 @@ if(NOT non_os_build)
 
     if(CONFIG_SOC_DEBUG_PROBE_SUPPORTED)
         list(APPEND srcs "debug_probe/debug_probe.c")
-    endif()
-
-    if(CONFIG_SOC_ASYNC_MEMCPY_SUPPORTED)
-        list(APPEND srcs "dma/esp_async_memcpy.c")
-        if(CONFIG_SOC_GDMA_SUPPORTED)
-            list(APPEND srcs "dma/async_memcpy_gdma.c")
-        endif() # CONFIG_SOC_GDMA_SUPPORTED
-        if(CONFIG_SOC_CP_DMA_SUPPORTED)
-            list(APPEND srcs "dma/async_memcpy_cp_dma.c")
-        endif() # CONFIG_SOC_CP_DMA_SUPPORTED
-    endif() # CONFIG_SOC_ASYNC_MEMCPY_SUPPORTED
-
-    if(CONFIG_SOC_DW_GDMA_SUPPORTED)
-        list(APPEND srcs "dma/dw_gdma.c")
-    endif()
-
-    if(CONFIG_SOC_DMA2D_SUPPORTED)
-        list(APPEND srcs "dma/dma2d.c")
     endif()
 
     if(CONFIG_SOC_SYSTIMER_SUPPORTED)
@@ -141,19 +112,24 @@ if(NOT non_os_build)
     endif()
 
     if(NOT CONFIG_APP_BUILD_TYPE_PURE_RAM_APP)
-        list(APPEND srcs "mspi_timing_tuning/mspi_timing_tuning.c")
+        list(APPEND srcs "mspi/mspi_timing_tuning/mspi_timing_tuning.c")
         if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_MSPI_DELAY AND NOT CONFIG_IDF_TARGET_ESP32S3)
-            if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c")
-                list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c")
+            set(mspi_delay_file
+                "${CMAKE_CURRENT_LIST_DIR}/mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c"
+            )
+            if(EXISTS "${mspi_delay_file}")
+                list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c")
             endif()
         endif()
 
         if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_DQS)
-            list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_dqs.c")
+            list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_dqs.c")
         endif()
         if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_FLASH_DELAY)
-            list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_flash_delay.c")
+            list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_flash_delay.c")
         endif()
+
+        list(APPEND srcs "mspi/mspi_intr/mspi_intr.c")
     endif()
 
     if(CONFIG_SOC_RTC_FAST_MEM_SUPPORTED AND CONFIG_ESP_ROM_SUPPORT_DEEP_SLEEP_WAKEUP_STUB)
@@ -176,15 +152,15 @@ else()
     if(ESP_TEE_BUILD)
         list(APPEND srcs "esp_clk.c" "hw_random.c")
         if(CONFIG_SECURE_TEE_EXT_FLASH_MEMPROT_SPI1)
-            list(APPEND srcs "mspi_timing_tuning/mspi_timing_tuning.c")
+            list(APPEND srcs "mspi/mspi_timing_tuning/mspi_timing_tuning.c")
             if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_MSPI_DELAY)
-                list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c")
+                list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_mspi_delay.c")
             endif()
             if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_DQS)
-                list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_dqs.c")
+                list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_dqs.c")
             endif()
             if(CONFIG_SOC_MEMSPI_TIMING_TUNING_BY_FLASH_DELAY)
-                list(APPEND srcs "mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_flash_delay.c")
+                list(APPEND srcs "mspi/mspi_timing_tuning/tuning_scheme_impl/mspi_timing_by_flash_delay.c")
             endif()
         endif()
     endif()
@@ -194,8 +170,9 @@ else()
 endif()
 
 set(public_include_dirs "include" "include/soc"
-                        "dma/include" "ldo/include" "debug_probe/include" "etm/include"
-                        "mspi_timing_tuning/include" "mspi_timing_tuning/tuning_scheme_impl/include"
+                        "ldo/include" "debug_probe/include" "etm/include"
+                        "mspi/mspi_timing_tuning/include" "mspi/mspi_timing_tuning/tuning_scheme_impl/include"
+                        "mspi/mspi_intr/include"
                         "power_supply/include" "modem/include")
 
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/include/soc/${target}")
@@ -210,22 +187,31 @@ if(NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3 AND CONFIG_IDF_TARGET_ESP32P4)
     endif()
 endif()
 
+if(${target} STREQUAL "esp32p4")
+    # for mipi_csi_share_hw_ctrl.c
+    list(APPEND priv_requires esp_hal_cam)
+endif()
+
 idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS ${public_include_dirs}
                        PRIV_INCLUDE_DIRS port/include include/esp_private
                        REQUIRES ${requires}
                        PRIV_REQUIRES "${priv_requires}"
-                       LDFRAGMENTS linker.lf dma/linker.lf ldo/linker.lf mspi_timing_tuning/linker.lf)
+                       LDFRAGMENTS linker.lf ldo/linker.lf mspi/linker.lf)
 
 idf_build_get_property(target IDF_TARGET)
 add_subdirectory(port/${target})
 if(CONFIG_SOC_SPI_MEM_SUPPORT_TIMING_TUNING)
-    add_subdirectory(mspi_timing_tuning/port/${target})
+    add_subdirectory(mspi/mspi_timing_tuning/port/${target})
 endif()
 add_subdirectory(lowpower)
 
 if(CONFIG_ESP_SLEEP_GPIO_RESET_WORKAROUND OR CONFIG_PM_SLP_DISABLE_GPIO)
     target_link_libraries(${COMPONENT_LIB} INTERFACE "-u esp_sleep_gpio_include")
+endif()
+
+if(CONFIG_SOC_PAU_SUPPORTED AND CONFIG_SOC_PM_SUPPORT_TOP_PD)
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-u sleep_system_peripheral_dummy")
 endif()
 
 if(NOT non_os_build)
@@ -238,3 +224,6 @@ if(${target} STREQUAL "esp32p4")
     # for mipi_csi_share_hw_ctrl.c
     idf_component_optional_requires(PRIVATE esp_hal_cam)
 endif()
+
+# Required in `adc_share_hw_ctrl.h`
+idf_component_optional_requires(PUBLIC esp_hal_ana_conv)

@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2025 Espressif Systems (Shanghai) CO LTD
  *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
 #pragma once
@@ -38,7 +38,7 @@
 #include "soc/lp_i2c_reg.h"
 #include "soc/lp_i2c_struct.h"
 #endif
-#if SOC_LP_TIMER_SUPPORTED
+#if SOC_RTC_TIMER_V2_SUPPORTED
 #include "soc/lp_timer_reg.h"
 #include "soc/lp_timer_struct.h"
 #endif

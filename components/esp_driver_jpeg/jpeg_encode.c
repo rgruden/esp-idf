@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2024-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2024-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -126,6 +126,12 @@ esp_err_t jpeg_new_encoder_engine(const jpeg_encode_engine_cfg_t *enc_eng_cfg, j
     encoder_engine->header_info = (jpeg_enc_header_info_t*)heap_caps_calloc(1, sizeof(jpeg_enc_header_info_t), JPEG_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(encoder_engine->header_info, ESP_ERR_NO_MEM, err, TAG, "no memory for jpeg header information structure");
 
+#if JPEG_USE_RETENTION_LINK
+    if (enc_eng_cfg->flags.allow_pd != 0) {
+        jpeg_create_retention_module(encoder_engine->codec_base);
+    }
+#endif // JPEG_USE_RETENTION_LINK
+
     *ret_encoder = encoder_engine;
     return ESP_OK;
 err:
@@ -245,7 +251,7 @@ esp_err_t jpeg_encoder_process(jpeg_encoder_handle_t encoder_engine, const jpeg_
 
     // 2D direction
     memset(encoder_engine->txlink, 0, sizeof(dma2d_descriptor_t));
-    s_cfg_desc(encoder_engine, encoder_engine->txlink, JPEG_DMA2D_2D_ENABLE, DMA2D_DESCRIPTOR_BLOCK_RW_MODE_MULTIPLE, dma_vb, dma_hb, JPEG_DMA2D_EOF_NOT_LAST, dma2d_desc_pixel_format_to_pbyte_value_fourcc(encoder_engine->picture_format), DMA2D_DESCRIPTOR_BUFFER_OWNER_DMA, encoder_engine->header_info->origin_v, encoder_engine->header_info->origin_h, raw_buffer, NULL);
+    s_cfg_desc(encoder_engine, encoder_engine->txlink, JPEG_DMA2D_2D_ENABLE, DMA2D_DESCRIPTOR_BLOCK_RW_MODE_MULTIPLE, dma_vb, dma_hb, JPEG_DMA2D_EOF_NOT_LAST, dma2d_desc_pixel_format_to_pbyte_value(encoder_engine->picture_format), DMA2D_DESCRIPTOR_BUFFER_OWNER_DMA, encoder_engine->header_info->origin_v, encoder_engine->header_info->origin_h, raw_buffer, NULL);
 
     ret = esp_cache_msync((void*)raw_buffer, inbuf_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
     assert(ret == ESP_OK);

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -24,12 +24,7 @@ const static char TAG[] __attribute__((unused)) = "esp_core_dump_common";
  * @brief Memory regions to dump, defined at compile time.
  */
 #if CONFIG_ESP_COREDUMP_CAPTURE_DRAM
-#if !CONFIG_IDF_TARGET_ESP32P4
-extern int _bss_start;
-extern int _bss_end;
-extern int _data_start;
-extern int _data_end;
-#else
+#if CONFIG_ESP32P4_SELECTS_REV_LESS_V3
 extern int _bss_start_low;
 extern int _bss_end_low;
 extern int _data_start_low;
@@ -38,6 +33,11 @@ extern int _bss_start_high;
 extern int _bss_end_high;
 extern int _data_start_high;
 extern int _data_end_high;
+#else
+extern int _bss_start;
+extern int _bss_end;
+extern int _data_start;
+extern int _data_end;
 #endif
 #endif
 
@@ -51,6 +51,19 @@ extern int _coredump_rtc_start;
 extern int _coredump_rtc_end;
 extern int _coredump_rtc_fast_start;
 extern int _coredump_rtc_fast_end;
+extern int _coredump_rtc_noinit_start;
+extern int _coredump_rtc_noinit_end;
+#else
+extern int _coredump_noinit_start;
+extern int _coredump_noinit_end;
+#endif
+#if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+extern int _coredump_extram_start;
+extern int _coredump_extram_end;
+#endif
+#if CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY
+extern int _coredump_extram_noinit_start;
+extern int _coredump_extram_noinit_end;
 #endif
 
 static void* s_exc_frame = NULL;
@@ -241,35 +254,20 @@ bool esp_core_dump_get_task_snapshot(void *handle, core_dump_task_header_t *task
     return true;
 }
 
-uint32_t esp_core_dump_get_user_ram_segments(void)
-{
-    uint32_t total_sz = 0;
-
-    // count number of memory segments to insert into ELF structure
-    total_sz += COREDUMP_GET_MEMORY_SIZE(&_coredump_dram_end, &_coredump_dram_start) > 0 ? 1 : 0;
-#if SOC_RTC_MEM_SUPPORTED
-    total_sz += COREDUMP_GET_MEMORY_SIZE(&_coredump_rtc_end, &_coredump_rtc_start) > 0 ? 1 : 0;
-    total_sz += COREDUMP_GET_MEMORY_SIZE(&_coredump_rtc_fast_end, &_coredump_rtc_fast_start) > 0 ? 1 : 0;
-#endif
-    total_sz += COREDUMP_GET_MEMORY_SIZE(&_coredump_iram_end, &_coredump_iram_start) > 0 ? 1 : 0;
-
-    return total_sz;
-}
-
 static const struct {
     int *start;
     int *end;
 } s_memory_sections[COREDUMP_MEMORY_MAX] = {
     [COREDUMP_MEMORY_IRAM] = { &_coredump_iram_start, &_coredump_iram_end },
 #if CONFIG_ESP_COREDUMP_CAPTURE_DRAM
-#if !CONFIG_IDF_TARGET_ESP32P4
-    [COREDUMP_MEMORY_DRAM_BSS] = { &_bss_start, &_bss_end },
-    [COREDUMP_MEMORY_DRAM_DATA] = { &_data_start, &_data_end },
-#else
+#if CONFIG_ESP32P4_SELECTS_REV_LESS_V3
     [COREDUMP_MEMORY_DRAM_BSS] = { &_bss_start_low, &_bss_end_low },
     [COREDUMP_MEMORY_DRAM_DATA] = { &_data_start_low, &_data_end_low },
     [COREDUMP_MEMORY_DRAM_BSS_HIGH] = { &_bss_start_high, &_bss_end_high },
     [COREDUMP_MEMORY_DRAM_DATA_HIGH] = { &_data_start_high, &_data_end_high },
+#else
+    [COREDUMP_MEMORY_DRAM_BSS] = { &_bss_start, &_bss_end },
+    [COREDUMP_MEMORY_DRAM_DATA] = { &_data_start, &_data_end },
 #endif
 #else
     [COREDUMP_MEMORY_DRAM] = { &_coredump_dram_start, &_coredump_dram_end },
@@ -277,6 +275,15 @@ static const struct {
 #if SOC_RTC_MEM_SUPPORTED
     [COREDUMP_MEMORY_RTC] = { &_coredump_rtc_start, &_coredump_rtc_end },
     [COREDUMP_MEMORY_RTC_FAST] = { &_coredump_rtc_fast_start, &_coredump_rtc_fast_end },
+    [COREDUMP_MEMORY_NOINIT] = { &_coredump_rtc_noinit_start, &_coredump_rtc_noinit_end },
+#else
+    [COREDUMP_MEMORY_NOINIT] = { &_coredump_noinit_start, &_coredump_noinit_end },
+#endif
+#if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+    [COREDUMP_MEMORY_EXTRAM] = { &_coredump_extram_start, &_coredump_extram_end },
+#endif
+#if CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY
+    [COREDUMP_MEMORY_EXTRAM_NOINIT] = { &_coredump_extram_noinit_start, &_coredump_extram_noinit_end },
 #endif
 };
 

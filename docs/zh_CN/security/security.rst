@@ -75,7 +75,7 @@ flash 加密功能可以加密外部 flash 中的内容，从而保护存储在 
 flash 加密最佳实践
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* 建议在生产环境中使用 flash 加密的量产模式。
+* 建议在生产环境中使用 flash 加密的 :ref:`flash-enc-release-mode`。
 * 建议为每个设备生成唯一的 flash 加密密钥。
 * 启用 :ref:`secure_boot-guide` 作为额外保护层，防止 flash 在启动前遭受恶意攻击。
 
@@ -157,7 +157,7 @@ flash 加密最佳实践
             * - 高
               - 72.4 %
 
-        .. [#] 上述性能数据通过 mbedtls 测试应用中的 AES 性能测试 :component_file:`test_aes_perf.c <mbedtls/test_apps/main/test_aes_perf.c>` 计算得出。
+        .. [#] 上述性能数据通过 mbedtls 测试应用中的 AES 性能测试 :component_file:`test_psa_aes_perf.c <mbedtls/test_apps/main/test_psa_aes_perf.c>` 计算得出。
 
         考虑到上述性能影响，ESP-IDF 默认关闭伪轮次功能，避免对相关性能造成影响。但如果需要更高的安全性，仍然建议启用。
 

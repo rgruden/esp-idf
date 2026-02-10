@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h> // For memset()
 #include <stdlib.h> // For abort()
-#include "soc/soc_caps_full.h"
+#include "soc/soc_caps.h"
 #include "soc/chip_revision.h"
 #include "soc/usb_periph.h"
 #include "hal/usb_dwc_hal.h"
@@ -44,7 +44,8 @@
 
 //Interrupts that pertain to core events
 #define CORE_EVENTS_INTRS_MSK (USB_DWC_LL_INTR_CORE_DISCONNINT | \
-                               USB_DWC_LL_INTR_CORE_HCHINT)
+                               USB_DWC_LL_INTR_CORE_HCHINT | \
+                               USB_DWC_LL_INTR_CORE_WKUPINT)
 
 //Interrupt that pertain to host port events
 #define PORT_EVENTS_INTRS_MSK (USB_DWC_LL_INTR_HPRT_PRTCONNDET | \
@@ -108,6 +109,21 @@ static void set_defaults(usb_dwc_hal_context_t *hal)
         hbstlen = 1;    //Set AHB burst to INCR to workaround hardware errata
     }
 #endif // SOC_IS(ESP32S2)
+#if SOC_IS(ESP32P4)
+    /*
+     * ESP32P4-specific initialization: Clear USB PHY suspend state set during system boot.
+     *
+     * During system initialization (see clk_gate_ll.h:periph_ll_clk_gate_set_default), the USB PHY
+     * is forced into suspend mode before disabling clocks to prevent USB leakage current and ensure
+     * proper power management.
+     *
+     * When initializing the USB DWC HAL, we need to restore the USB PHY to normal operation by:
+     *   1. Clearing GOTGCTL.BvalidOvEn (disable override, allow hardware to detect session validity)
+     *   2. Clearing PCGCCTL.StopPclk (resume PHY clock for normal operation)
+     */
+    usb_dwc_ll_enable_bvalid_override(hal->dev, false);
+    usb_dwc_ll_set_stoppclk(hal->dev, false);
+#endif // SOC_IS(ESP32P4)
     usb_dwc_ll_gahbcfg_set_hbstlen(hal->dev, hbstlen);  //Set AHB burst mode
     //GUSBCFG register
     usb_dwc_ll_gusbcfg_dis_hnp_cap(hal->dev);       //Disable HNP
@@ -462,6 +478,8 @@ usb_dwc_hal_port_event_t usb_dwc_hal_decode_intr(usb_dwc_hal_context_t *hal)
         } else if (intrs_port & USB_DWC_LL_INTR_HPRT_PRTCONNDET && !hal->flags.dbnc_lock_enabled) {
             event = USB_DWC_HAL_PORT_EVENT_CONN;
             debounce_lock_enable(hal);
+        } else if (intrs_core & USB_DWC_LL_INTR_CORE_WKUPINT) {
+            event = USB_DWC_HAL_PORT_EVENT_REMOTE_WAKEUP;   // Remote wakeup was generated from device
         }
     }
     //Port events always take precedence over channel events

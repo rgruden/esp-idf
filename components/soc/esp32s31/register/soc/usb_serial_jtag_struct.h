@@ -1,7 +1,7 @@
 /**
  * SPDX-FileCopyrightText: 2025 Espressif Systems (Shanghai) CO LTD
  *
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 #pragma once
 
@@ -971,6 +971,7 @@ typedef struct {
     volatile usb_serial_jtag_date_reg_t date;
 } usb_serial_jtag_dev_t;
 
+extern usb_serial_jtag_dev_t USB_SERIAL_JTAG;
 
 #ifndef __cplusplus
 _Static_assert(sizeof(usb_serial_jtag_dev_t) == 0x84, "Invalid size of usb_serial_jtag_dev_t structure");

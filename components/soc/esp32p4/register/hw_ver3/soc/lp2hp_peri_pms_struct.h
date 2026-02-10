@@ -1,7 +1,7 @@
 /**
  * SPDX-FileCopyrightText: 2025 Espressif Systems (Shanghai) CO LTD
  *
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 #pragma once
 
@@ -192,10 +192,10 @@ typedef union {
          *  NA
          */
         uint32_t reg_lp_mm_hp_rmt_allow:1;
-        /** reg_lp_mm_hp_bitsrambler_allow : R/W; bitpos: [23]; default: 1;
+        /** reg_lp_mm_hp_bitscrambler_allow : R/W; bitpos: [23]; default: 1;
          *  NA
          */
-        uint32_t reg_lp_mm_hp_bitsrambler_allow:1;
+        uint32_t reg_lp_mm_hp_bitscrambler_allow:1;
         /** reg_lp_mm_hp_axi_icm_allow : R/W; bitpos: [24]; default: 1;
          *  NA
          */

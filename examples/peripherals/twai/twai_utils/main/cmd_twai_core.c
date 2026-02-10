@@ -246,12 +246,10 @@ static int twai_init_handler(int argc, char **argv)
     /* Configure optional clock output GPIO */
     if (twai_init_args.clk_out_gpio->count > 0) {
         clk_gpio = twai_init_args.clk_out_gpio->ival[0];
-        if (clk_gpio >= 0) {
-            ret = GPIO_IS_VALID_OUTPUT_GPIO(clk_gpio) ? ESP_OK : ESP_ERR_INVALID_ARG;
-            ESP_GOTO_ON_ERROR(ret, err, TAG, "Invalid CLK out GPIO: %d", clk_gpio);
-            ctx->driver_config.io_cfg.quanta_clk_out = clk_gpio;
-            ESP_LOGI(TAG, "Clock output GPIO set to %d", clk_gpio);
-        }
+        ret = GPIO_IS_VALID_OUTPUT_GPIO(clk_gpio) ? ESP_OK : ESP_ERR_INVALID_ARG;
+        ESP_GOTO_ON_ERROR(ret, err, TAG, "Invalid CLK out GPIO: %d", clk_gpio);
+        ctx->driver_config.io_cfg.quanta_clk_out = clk_gpio;
+        ESP_LOGI(TAG, "Clock output GPIO set to %d", clk_gpio);
     } else {
         ctx->driver_config.io_cfg.quanta_clk_out = -1;
         ESP_LOGI(TAG, "Clock output disabled");
@@ -305,6 +303,9 @@ static int twai_init_handler(int argc, char **argv)
     ctx->driver_config.data_timing.bitrate = 0;  /* FD disabled */
 #endif
     ESP_LOGI(TAG, "FD bitrate set to %" PRIu32, ctx->driver_config.data_timing.bitrate);
+
+    /* Always configure timestamp frequency to 1MHz */
+    ctx->driver_config.timestamp_resolution_hz = 1000000;
 
     /* Start TWAI controller */
     controller->node_handle = twai_start(controller);
@@ -605,12 +606,6 @@ void register_twai_core_commands(void)
             .data_timing = {
 #if CONFIG_EXAMPLE_ENABLE_TWAI_FD
                 .bitrate = CONFIG_EXAMPLE_DEFAULT_FD_BITRATE,
-                .sp_permill = 0,
-                .ssp_permill = 700,
-#else
-                .bitrate = 0,
-                .sp_permill = 0,
-                .ssp_permill = 0,
 #endif
             },
             .fail_retry_cnt = -1,

@@ -14,6 +14,7 @@ from pathlib import Path
 from esp_docs.conf_docs import *  # noqa: F403,F401
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'cmakev2')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tools', 'docs')))
 
 if os.environ.get('IDF_PATH') is None:
     raise RuntimeError('IDF_PATH should be set, run export.sh before building docs')
@@ -37,6 +38,7 @@ BLE_DOCS = [
     'api-guides/ble/ble-feature-support-status.rst',
     'api-guides/ble/host-feature-support-status.rst',
     'api-guides/ble/ble-qualification.rst',
+    'api-guides/ble/ble-multiconnection-guide.rst',
     'api-guides/ble/get-started/ble-introduction.rst',
     'api-guides/ble/get-started/ble-device-discovery.rst',
     'api-guides/ble/get-started/ble-connection.rst',
@@ -89,7 +91,7 @@ BLUFI_DOCS = ['api-guides/ble/blufi.rst', 'api-reference/bluetooth/esp_blufi.rst
 
 WIFI_DOCS = [
     'api-guides/low-power-mode/low-power-mode-wifi.rst',
-    'api-guides/wifi.rst',
+    'api-guides/wifi-driver/**',
     'api-guides/wifi-security.rst',
     'api-guides/wireshark-user-guide.rst',
     'api-reference/network/esp_now.rst',
@@ -207,6 +209,10 @@ I2C_DOCS = [
     'api-reference/peripherals/i2c_slave_v1.rst',
 ]
 
+I3C_DOCS = [
+    'api-reference/peripherals/i3c_master.rst',
+]
+
 SPI_DOCS = [
     'api-reference/peripherals/spi_master.rst',
     'api-reference/peripherals/spi_slave.rst',
@@ -317,12 +323,16 @@ ESP32C6_DOCS = [
     'api-guides/phy.rst',
 ] + ESP_TEE_DOCS
 
-ESP32H2_DOCS = ['api-guides/RF_calibration.rst', 'api-guides/phy.rst']
+ESP32H2_DOCS = ['api-guides/RF_calibration.rst', 'api-guides/phy.rst'] + ESP_TEE_DOCS
 
 ESP32H4_DOCS = [
     'api-reference/system/ipc.rst',
     'api-guides/RF_calibration.rst',
     'api-guides/phy.rst',
+]
+
+ESP32S31_DOCS = [
+    'api-reference/system/ipc.rst',
 ]
 
 ESP32P4_DOCS = [
@@ -375,6 +385,7 @@ conditional_include_dict = {
     'SOC_TOUCH_SENSOR_SUPPORTED': TOUCH_SENSOR_DOCS,
     'SOC_TWAI_SUPPORTED': TWAI_DOCS,
     'SOC_I2C_SUPPORTED': I2C_DOCS,
+    'SOC_I3C_MASTER_SUPPORTED': I3C_DOCS,
     'SOC_GPSPI_SUPPORTED': SPI_DOCS,
     'SOC_I2S_SUPPORTED': I2S_DOCS,
     'SOC_LP_I2S_SUPPORTED': LP_I2S_DOCS,
@@ -403,6 +414,7 @@ conditional_include_dict = {
     'esp32c61': ESP32C61_DOCS,
     'esp32h2': ESP32H2_DOCS,
     'esp32h4': ESP32H4_DOCS,
+    'esp32s31': ESP32S31_DOCS,
     'esp32p4': ESP32P4_DOCS,
 }
 
@@ -415,13 +427,13 @@ extensions += [  # noqa: F405
     'esp_docs.idf_extensions.build_system',
     'esp_docs.idf_extensions.esp_err_definitions',
     'esp_docs.idf_extensions.gen_defines',
-    'esp_docs.idf_extensions.gen_version_specific_includes',
     'esp_docs.idf_extensions.kconfig_reference',
     'esp_docs.idf_extensions.gen_idf_tools_links',
     'esp_docs.esp_extensions.run_doxygen',
     'esp_docs.esp_extensions.add_html_zip',
     'linuxdoc.rstFlatTable',  # https://return42.github.io/linuxdoc/linuxdoc-howto/table-markup.html#flat-table
     'esp_docs_cmakev2_extension',
+    'gen_version_specific_includes',
 ]
 
 # Use wavedrompy as backend, instead of wavedrom-cli
@@ -492,6 +504,9 @@ idf_build_system = {
 # Please update following list to enable Qemu doc guide (and cross references) for a new target
 QEMU_TARGETS = ['esp32', 'esp32c3', 'esp32s3']
 
+# Please update following list to enable ESP-TEE doc guide (and cross references) for a new target
+ESP_TEE_TARGETS = ['esp32c6', 'esp32h2', 'esp32c5', 'esp32c61']
+
 
 # Callback function for user setup that needs be done after `config-init`-event
 # config.idf_target is not available at the initial config stage
@@ -504,6 +519,9 @@ def conf_setup(app, config):
 
     if config.idf_target in QEMU_TARGETS:
         app.tags.add('TARGET_SUPPORT_QEMU')
+
+    if config.idf_target in ESP_TEE_TARGETS:
+        app.tags.add('TARGET_SUPPORT_ESP_TEE')
 
     try:
         with open(add_warnings_file) as warning_file:

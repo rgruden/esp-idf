@@ -14,7 +14,7 @@
 #include "esp_flash.h"
 #include "esp_private/spi_common_internal.h"
 #include "esp_flash_spi_init.h"
-#include "memspi_host_driver.h"
+#include "esp_private/memspi_host_driver.h"
 #include <esp_attr.h>
 #include "esp_log.h"
 #include "test_utils.h"
@@ -614,8 +614,7 @@ void test_permutations_part(const flashtest_config_t* config, esp_partition_t* p
             //the io mode will switch frequently.
             esp_flash_io_mode_t io_mode = SPI_FLASH_READ_MODE_MIN;
             while (io_mode != SPI_FLASH_QIO + 1) {
-                if (io_mode > SPI_FLASH_FASTRD &&
-                    !SOC_SPI_PERIPH_SUPPORT_MULTILINE_MODE(config->host_id)) {
+                if (io_mode > SPI_FLASH_FASTRD && (SOC_SPI_MAX_BITWIDTH(config->host_id) < 2)) {
                     io_mode++;
                     continue;
                 }

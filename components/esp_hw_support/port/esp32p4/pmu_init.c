@@ -91,7 +91,7 @@ void pmu_hp_system_init(pmu_context_t *ctx, pmu_hp_mode_t mode, pmu_hp_system_pa
     pmu_ll_hp_set_bias_sleep_enable           (ctx->hal->dev, mode, anlg->bias.bias_sleep);
     pmu_ll_hp_set_regulator_sleep_memory_xpd  (ctx->hal->dev, mode, anlg->regulator0.slp_mem_xpd);
     pmu_ll_hp_set_regulator_sleep_logic_xpd   (ctx->hal->dev, mode, anlg->regulator0.slp_logic_xpd);
-    if (ESP_CHIP_REV_ABOVE(efuse_hal_chip_revision(), 100) && (mode == PMU_MODE_HP_SLEEP)) {
+    if (ESP_CHIP_REV_ABOVE(efuse_hal_chip_revision(), 300) && (mode == PMU_MODE_HP_SLEEP)) {
         pmu_ll_hp_enable_sleep_flash_ldo_channel(ctx->hal->dev, anlg->regulator0.xpd_0p1a);
     }
     pmu_ll_hp_set_regulator_sleep_logic_dbias (ctx->hal->dev, mode, anlg->regulator0.slp_logic_dbias);
@@ -177,7 +177,7 @@ static void pmu_hp_system_init_default(pmu_context_t *ctx)
         pmu_hp_system_param_default(mode, &param);
         pmu_hp_system_init(ctx, mode, &param);
     }
-#if CONFIG_ESP32P4_REV_MIN_FULL >= 300
+#if !CONFIG_ESP32P4_SELECTS_REV_LESS_V3
     lp_sys_ll_set_hp_mem_lowpower_mode(MEM_AUX_DEEPSLEEP);
 #endif
 }
@@ -196,7 +196,7 @@ static void pmu_lp_system_init_default(pmu_context_t *ctx)
         pmu_lp_system_param_default(mode, &param);
         pmu_lp_system_init(ctx, mode, &param);
     }
-#if CONFIG_ESP32P4_REV_MIN_FULL >= 300
+#if !CONFIG_ESP32P4_SELECTS_REV_LESS_V3
     lp_sys_ll_set_lp_mem_lowpower_mode(MEM_AUX_DEEPSLEEP);
 #endif
 }

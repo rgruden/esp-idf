@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2024-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2024-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,9 +11,9 @@
 #include "esp_log.h"
 #include "esp_rom_gpio.h"
 #include "esp32c61/rom/spi_flash.h"
-#include "soc/gpio_periph.h"
 #include "soc/spi_reg.h"
 #include "soc/spi_mem_reg.h"
+#include "soc/spi_pins.h"
 #include "soc/soc_caps.h"
 #include "flash_qio_mode.h"
 #include "bootloader_flash_config.h"
@@ -230,6 +230,12 @@ esp_err_t bootloader_init_spi_flash(void)
 {
     bootloader_init_mspi_clock();
     bootloader_init_flash_configure();
+
+#if CONFIG_BOOTLOADER_FLASH_DC_AWARE
+    // Reset flash, clear volatile bits DC[0:1]. Make it work under default mode to boot.
+    bootloader_spi_flash_reset();
+#endif
+
     bootloader_spi_flash_resume();
     if ((void*)bootloader_flash_unlock != (void*)bootloader_flash_unlock_default) {
         ESP_EARLY_LOGD(TAG, "Using overridden bootloader_flash_unlock");

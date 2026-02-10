@@ -510,6 +510,9 @@ If all partitions needs to be updated in encrypted format, run:
 
     idf.py encrypted-flash monitor
 
+.. note::
+
+    The above operations are only applicable when the ``DIS_DOWNLOAD_MANUAL_ENCRYPT`` eFuse bit has not been programmed. If this eFuse bit has been programmed, you must flash the pre-encrypted ciphertext image instead.
 
 .. _flash-enc-release-mode:
 
@@ -1154,7 +1157,7 @@ The following sections provide some reference information about the operation of
       * - High
         - 18 %
 
-  .. [#] The above performance numbers have been calculated using the XTS-AES test of the HAL crypto test app :component_file:`test_xts_aes.c <hal/test_apps/crypto/main/xts_aes/test_xts_aes.c>`.
+  .. [#] The above performance numbers have been calculated using the XTS-AES test of the HAL crypto test app :component_file:`test_xts_aes.c <esp_hal_security/test_apps/crypto/main/xts_aes/test_xts_aes.c>`.
 
   You can configure the strength of the pseudo rounds functions according to your use cases. For example, increasing the strength would provide higher security but would slow down the flash encryption/decryption operations.
 

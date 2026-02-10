@@ -9,7 +9,7 @@ IDF 前端工具 - ``idf.py``
 - Ninja_ 用于构建工程。
 - `esptool`_ 用于烧录目标芯片。
 
-:ref:`第五步：开始使用 ESP-IDF 吧 <get-started-configure>` 简要介绍了设置 ``idf.py`` 以配置、构建及烧录工程的操作流程。
+:ref:`Windows <get-started-configure>`、 :ref:`Linux 或 macOS 配置项目 <get-started-configure-linux-macos>` 中简要介绍了设置 ``idf.py`` 以配置、构建及烧录工程的操作流程。
 
 .. important::
 
@@ -176,7 +176,7 @@ uf2 二进制文件也可以通过 :ref:`idf.py uf2 <generate-uf2-binary>` 生�
 
 命令 ``idf.py`` 支持 bash、zsh 和 fish shell 的 `shell 自动补全 <https://click.palletsprojects.com/shell-completion/>`_。
 
-调用命令 ``export`` 为 ``idf.py`` 启用自动补全（:ref:`第四步：设置环境变量 <get-started-set-up-env>`），按 TAB 键启动自动补全。输入 ``idf.py -`` 并按 TAB 键以自动补全选项。
+调用命令 ``export`` 为 ``idf.py`` 启用自动补全（:ref:`Windows <get-started-set-up-env>`、:ref:`Linux 或 macOS 设置环境<get-started-set-up-env-linux-macos>`），按 TAB 键启动自动补全。输入 ``idf.py -`` 并按 TAB 键以自动补全选项。
 
 预计未来版本将支持 PowerShell 自动补全。
 
@@ -401,11 +401,11 @@ ESP-IDF 支持 `CMake presets`_ 以简化多个构建配置的管理。此功能
 
   flash --baud 115200
 
-运行命令：``idf.py @custom_flash.txt monitor``
+运行命令：``idf.py "@custom_flash.txt" monitor``
 
-文件中的参数可以与额外的命令行参数结合使用，也支持同时使用带有 ``@`` 标注的多个文件。例如，另有一个文件 ``another_config.txt``，此时，可以通过指定 ``idf.py @custom_flash.txt @another_config.txt monitor`` 同时使用两个文件。
+文件中的参数可以与额外的命令行参数结合使用，也支持同时使用带有 ``@`` 标注的多个文件。例如，另有一个文件 ``another_config.txt``，此时，可以通过指定 ``idf.py "@custom_flash.txt" "@another_config.txt" monitor`` 同时使用两个文件。
 
-关于参数文件的更多示例，如通过 @filename 创建配置文件概要，请参阅 :example_file:`多个构建配置示例 <build_system/cmake/multi_config/README.md>`。
+关于参数文件的更多示例，如通过 @filename 创建配置文件概要，请参阅多个构建配置示例文档中的 `创建配置文件概要 <profile_file_>`_ 小节。
 
 扩展 ``idf.py``
 ====================
@@ -517,3 +517,4 @@ ESP-IDF 支持 `CMake presets`_ 以简化多个构建配置的管理。此功能
 .. _CCache: https://ccache.dev/
 .. _click context: https://click.palletsprojects.com/en/stable/api/#context
 .. _CMake presets: https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html
+.. _profile_file: https://github.com/espressif/esp-idf/tree/release/v5.5/examples/build_system/cmake/multi_config#create-configuration-profile-files-via-filename

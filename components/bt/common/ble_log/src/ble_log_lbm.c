@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2025-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -198,6 +198,7 @@ bool ble_log_lbm_init(void)
     /* Initialize lock types for spin pool */
     for (int i = 0; i < BLE_LOG_LBM_SPIN_MAX; i++) {
         lbm_ctx->spin_pool[i].lock_type = BLE_LOG_LBM_LOCK_SPIN;
+        portMUX_INITIALIZE(&(lbm_ctx->spin_pool[i].spin_lock));
     }
 
 #if CONFIG_BLE_LOG_LL_ENABLED
@@ -421,20 +422,21 @@ deref:
     BLE_LOG_REF_COUNT_RELEASE(&lbm_ref_count);
 }
 
+BLE_LOG_IRAM_ATTR
 bool ble_log_write_hex(ble_log_src_t src_code, const uint8_t *addr, size_t len)
 {
     BLE_LOG_REF_COUNT_ACQUIRE(&lbm_ref_count);
-    size_t payload_len = len + sizeof(uint32_t);
     if (!lbm_enabled) {
         goto exit;
     }
 
     /* Get transport */
+    size_t payload_len = len + sizeof(uint32_t);
     ble_log_lbm_t *lbm = ble_log_lbm_acquire();
     ble_log_prph_trans_t **trans = ble_log_lbm_get_trans(lbm, payload_len);
     if (!trans) {
         ble_log_lbm_release(lbm);
-        goto exit;
+        goto failed;
     }
 
     /* Write transport */
@@ -449,12 +451,13 @@ bool ble_log_write_hex(ble_log_src_t src_code, const uint8_t *addr, size_t len)
     BLE_LOG_REF_COUNT_RELEASE(&lbm_ref_count);
     return true;
 
-exit:
+failed:
 #if CONFIG_BLE_LOG_ENH_STAT_ENABLED
     if (lbm_inited) {
         ble_log_stat_mgr_update(src_code, payload_len, true);
     }
 #endif /* CONFIG_BLE_LOG_ENH_STAT_ENABLED */
+exit:
     BLE_LOG_REF_COUNT_RELEASE(&lbm_ref_count);
     return false;
 }
@@ -465,10 +468,12 @@ void ble_log_write_hex_ll(uint32_t len, const uint8_t *addr,
                           uint32_t len_append, const uint8_t *addr_append, uint32_t flag)
 {
     BLE_LOG_REF_COUNT_ACQUIRE(&lbm_ref_count);
-    size_t payload_len = len + len_append;
+    if (!lbm_enabled) {
+        goto exit;
+    }
 
-    /* Source code shall be determined before LBM enable status check */
-    ble_log_src_t src_code;
+    /* Source code shall be determined before LBM determination */
+    ble_log_src_t src_code = BLE_LOG_SRC_MAX;
     bool use_ll_task = false;
     if (flag & BIT(BLE_LOG_LL_FLAG_ISR)) {
         src_code = BLE_LOG_SRC_LL_ISR;
@@ -482,24 +487,33 @@ void ble_log_write_hex_ll(uint32_t len, const uint8_t *addr,
     }
     bool omdata = flag & BIT(BLE_LOG_LL_FLAG_OMDATA);
 
-    if (!lbm_enabled) {
-        goto exit;
-    }
-
     /* Determine LBM by flag */
     ble_log_lbm_t *lbm;
     if (BLE_LOG_IN_ISR()) {
         /* Reuse common LBM acquire logic */
         lbm = ble_log_lbm_acquire();
+
+        /* os_mbuf_copydata is in flash and not safe to call from ISR */
+        omdata = false;
     } else {
-        lbm = (use_ll_task)? &(lbm_ctx->lbm_ll_task): &(lbm_ctx->lbm_ll_hci);
+        if (use_ll_task) {
+            lbm = &(lbm_ctx->lbm_ll_task);
+        } else {
+            lbm = &(lbm_ctx->lbm_ll_hci);
+#if CONFIG_BLE_LOG_LL_HCI_LOG_PAYLOAD_LEN_LIMIT_ENABLED
+            if (len_append > CONFIG_BLE_LOG_LL_HCI_LOG_PAYLOAD_LEN_LIMIT) {
+                len_append = CONFIG_BLE_LOG_LL_HCI_LOG_PAYLOAD_LEN_LIMIT;
+            }
+#endif /* CONFIG_BLE_LOG_LL_HCI_LOG_PAYLOAD_LEN_LIMIT_ENABLED */
+        }
     }
 
     /* Get transport */
+    size_t payload_len = len + len_append;
     ble_log_prph_trans_t **trans = ble_log_lbm_get_trans(lbm, payload_len);
     if (!trans) {
         ble_log_lbm_release(lbm);
-        goto exit;
+        goto failed;
     }
 
     /* Write transport */
@@ -509,12 +523,13 @@ void ble_log_write_hex_ll(uint32_t len, const uint8_t *addr,
     BLE_LOG_REF_COUNT_RELEASE(&lbm_ref_count);
     return;
 
-exit:
+failed:
 #if CONFIG_BLE_LOG_ENH_STAT_ENABLED
     if (lbm_inited) {
         ble_log_stat_mgr_update(src_code, payload_len, true);
     }
 #endif /* CONFIG_BLE_LOG_ENH_STAT_ENABLED */
+exit:
     BLE_LOG_REF_COUNT_RELEASE(&lbm_ref_count);
     return;
 }

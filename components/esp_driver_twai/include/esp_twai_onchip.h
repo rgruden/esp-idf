@@ -26,13 +26,14 @@ typedef struct {
     twai_clock_source_t clk_src;            /**< Optional, clock source, remain 0 to using TWAI_CLK_SRC_DEFAULT by default */
     twai_timing_basic_config_t bit_timing;  /**< Timing configuration for classic twai and FD arbitration stage */
     twai_timing_basic_config_t data_timing; /**< Optional, timing configuration for FD data stage */
+    uint32_t timestamp_resolution_hz;       /**< Timebase frequency (in Hz), used for recording the timestamp of RX frame, set 0 to disable the timestamp feature */
     int8_t fail_retry_cnt;                  /**< Hardware retry limit if failed, range [-1:15], -1 for re-trans forever */
     uint32_t tx_queue_depth;                /**< Depth of the transmit queue */
     int intr_priority;                      /**< Interrupt priority, [0:3] */
     struct {
         uint32_t enable_self_test: 1;       /**< Transmission does not require acknowledgment. Use this mode for self testing */
-        uint32_t enable_loopback: 1;        /**< The TWAI controller receive back frames what it send out */
-        uint32_t enable_listen_only: 1;     /**< The TWAI controller will not influence the bus (No transmissions or acknowledgments) but can receive messages */
+        uint32_t enable_loopback: 1;        /**< The TWAI controller receives back frames that it sends out, but does not acknowledge them */
+        uint32_t enable_listen_only: 1;     /**< No transmissions or acknowledgements. The controller only monitors the bus without participating */
         uint32_t no_receive_rtr: 1;         /**< Don't receive remote frames */
     } flags;                                /**< Misc configuration flags */
 } twai_onchip_node_config_t;

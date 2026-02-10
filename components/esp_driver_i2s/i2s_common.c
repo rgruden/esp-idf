@@ -23,7 +23,6 @@
 
 #include "hal/i2s_periph.h"
 #include "soc/soc_caps.h"
-#include "soc/soc_caps_full.h"
 #include "hal/i2s_hal.h"
 #include "hal/hal_utils.h"
 #include "hal/dma_types.h"
@@ -371,6 +370,40 @@ err:
 
     return ret;
 }
+
+#if SOC_I2S_HW_VERSION_1
+esp_err_t i2s_channel_change_port(i2s_chan_handle_t handle, int id)
+{
+    I2S_NULL_POINTER_CHECK(TAG, handle);
+    ESP_RETURN_ON_FALSE(id >= 0 && id < I2S_LL_GET(INST_NUM), ESP_ERR_INVALID_ARG, TAG, "invalid I2S port id");
+    if (id == handle->controller->id) {
+        return ESP_OK;
+    }
+    i2s_controller_t *i2s_obj = i2s_acquire_controller_obj(id);
+    if (!i2s_obj || !i2s_take_available_channel(i2s_obj, handle->dir)) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    i2s_controller_t *old_i2s_obj = handle->controller;
+    portENTER_CRITICAL(&g_i2s.spinlock);
+    if (handle->dir == I2S_DIR_TX) {
+        i2s_obj->tx_chan = handle;
+        i2s_obj->chan_occupancy |= I2S_DIR_TX;
+        old_i2s_obj->tx_chan = NULL;
+        old_i2s_obj->full_duplex = false;
+        old_i2s_obj->chan_occupancy &= ~I2S_DIR_TX;
+    } else {
+        i2s_obj->rx_chan = handle;
+        i2s_obj->chan_occupancy |= I2S_DIR_RX;
+        old_i2s_obj->rx_chan = NULL;
+        old_i2s_obj->full_duplex = false;
+        old_i2s_obj->chan_occupancy &= ~I2S_DIR_RX;
+    }
+    handle->controller = i2s_obj;
+    portEXIT_CRITICAL(&g_i2s.spinlock);
+
+    return ESP_OK;
+}
+#endif
 
 #ifndef __cplusplus
 /* To make sure the i2s_event_callbacks_t is same size as i2s_event_callbacks_internal_t */
@@ -760,21 +793,21 @@ esp_err_t i2s_init_dma_intr(i2s_chan_handle_t handle, int intr_flag)
     int port_id = handle->controller->id;
     ESP_RETURN_ON_FALSE((port_id >= 0) && (port_id < I2S_LL_GET(INST_NUM)), ESP_ERR_INVALID_ARG, TAG, "invalid handle");
     /* Set GDMA trigger module */
-    gdma_trigger_t trig = {.periph = GDMA_TRIG_PERIPH_I2S};
+    gdma_trigger_t trig = {0};
 
     switch (port_id) {
 #if I2S_LL_GET(INST_NUM) > 2
     case I2S_NUM_2:
-        trig.instance_id = SOC_GDMA_TRIG_PERIPH_I2S2;
+        trig = GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_I2S, 2);
         break;
 #endif
 #if I2S_LL_GET(INST_NUM) > 1
     case I2S_NUM_1:
-        trig.instance_id = SOC_GDMA_TRIG_PERIPH_I2S1;
+        trig = GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_I2S, 1);
         break;
 #endif
     case I2S_NUM_0:
-        trig.instance_id = SOC_GDMA_TRIG_PERIPH_I2S0;
+        trig = GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_I2S, 0);
         break;
     default:
         ESP_LOGE(TAG, "Unsupported I2S port number");
@@ -788,17 +821,15 @@ esp_err_t i2s_init_dma_intr(i2s_chan_handle_t handle, int intr_flag)
 #endif
     };
     if (handle->dir == I2S_DIR_TX) {
-        dma_cfg.direction = GDMA_CHANNEL_DIRECTION_TX;
         /* Register a new GDMA tx channel */
-        ESP_RETURN_ON_ERROR(gdma_new_ahb_channel(&dma_cfg, &handle->dma.dma_chan), TAG, "Register tx dma channel error");
+        ESP_RETURN_ON_ERROR(gdma_new_ahb_channel(&dma_cfg, &handle->dma.dma_chan, NULL), TAG, "Register tx dma channel error");
         ESP_GOTO_ON_ERROR(gdma_connect(handle->dma.dma_chan, trig), err1, TAG, "Connect tx dma channel error");
         gdma_tx_event_callbacks_t cb = {.on_trans_eof = i2s_dma_tx_callback};
         /* Set callback function for GDMA, the interrupt is triggered by GDMA, then the GDMA ISR will call the  callback function */
         ESP_GOTO_ON_ERROR(gdma_register_tx_event_callbacks(handle->dma.dma_chan, &cb, handle), err2, TAG, "Register tx callback failed");
     } else {
-        dma_cfg.direction = GDMA_CHANNEL_DIRECTION_RX;
         /* Register a new GDMA rx channel */
-        ESP_RETURN_ON_ERROR(gdma_new_ahb_channel(&dma_cfg, &handle->dma.dma_chan), TAG, "Register rx dma channel error");
+        ESP_RETURN_ON_ERROR(gdma_new_ahb_channel(&dma_cfg, NULL, &handle->dma.dma_chan), TAG, "Register rx dma channel error");
         ESP_GOTO_ON_ERROR(gdma_connect(handle->dma.dma_chan, trig), err1, TAG, "Connect rx dma channel error");
         gdma_rx_event_callbacks_t cb = {.on_recv_eof = i2s_dma_rx_callback};
         /* Set callback function for GDMA, the interrupt is triggered by GDMA, then the GDMA ISR will call the  callback function */
@@ -988,6 +1019,7 @@ esp_err_t i2s_new_channel(const i2s_chan_config_t *chan_cfg, i2s_chan_handle_t *
         ESP_GOTO_ON_ERROR(i2s_register_channel(i2s_obj, I2S_DIR_TX, chan_cfg->dma_desc_num),
                           err, TAG, "register I2S tx channel failed");
         i2s_obj->tx_chan->role = chan_cfg->role;
+        i2s_obj->tx_chan->is_port_auto = id == I2S_NUM_AUTO;
         i2s_obj->tx_chan->intr_prio_flags = chan_cfg->intr_priority ? BIT(chan_cfg->intr_priority) : ESP_INTR_FLAG_LOWMED;
         i2s_obj->tx_chan->dma.auto_clear_after_cb = chan_cfg->auto_clear_after_cb;
         i2s_obj->tx_chan->dma.auto_clear_before_cb = chan_cfg->auto_clear_before_cb;
@@ -1003,6 +1035,7 @@ esp_err_t i2s_new_channel(const i2s_chan_config_t *chan_cfg, i2s_chan_handle_t *
         ESP_GOTO_ON_ERROR(i2s_register_channel(i2s_obj, I2S_DIR_RX, chan_cfg->dma_desc_num),
                           err, TAG, "register I2S rx channel failed");
         i2s_obj->rx_chan->role = chan_cfg->role;
+        i2s_obj->rx_chan->is_port_auto = id == I2S_NUM_AUTO;
         i2s_obj->rx_chan->intr_prio_flags = chan_cfg->intr_priority ? BIT(chan_cfg->intr_priority) : ESP_INTR_FLAG_LOWMED;
         i2s_obj->rx_chan->dma.desc_num = chan_cfg->dma_desc_num;
         i2s_obj->rx_chan->dma.frame_num = chan_cfg->dma_frame_num;
@@ -1046,7 +1079,7 @@ esp_err_t i2s_del_channel(i2s_chan_handle_t handle)
     bool is_bound = true;
 
 #if SOC_I2S_HW_VERSION_2
-    I2S_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         if (dir == I2S_DIR_TX) {
             i2s_ll_tx_disable_clock(handle->controller->hal.dev);
         } else {
@@ -1059,7 +1092,7 @@ esp_err_t i2s_del_channel(i2s_chan_handle_t handle)
         /* Must switch back to D2CLK on ESP32-S2,
          * because the clock of some registers are bound to APLL,
          * otherwise, once APLL is disabled, the registers can't be updated anymore */
-        I2S_CLOCK_SRC_ATOMIC() {
+        PERIPH_RCC_ATOMIC() {
             if (handle->dir == I2S_DIR_TX) {
                 i2s_ll_tx_clk_set_src(handle->controller->hal.dev, I2S_CLK_SRC_DEFAULT);
             } else {
@@ -1153,6 +1186,12 @@ found:
     chan_info->dir = handle->dir;
     chan_info->role = handle->role;
     chan_info->mode = handle->mode;
+    chan_info->is_enabled = handle->state == I2S_CHAN_STATE_RUNNING;
+    chan_info->clk_src = handle->clk_src;
+    chan_info->sclk_hz = handle->sclk_hz;
+    chan_info->mclk_hz = handle->curr_mclk_hz;
+    chan_info->bclk_hz = handle->bclk_hz;
+    chan_info->mode_cfg = handle->mode_info;
     chan_info->total_dma_buf_size = handle->state >= I2S_CHAN_STATE_READY ? handle->dma.desc_num * handle->dma.buf_size : 0;
     if (handle->controller->full_duplex) {
         if (handle->dir == I2S_DIR_TX) {
@@ -1442,7 +1481,7 @@ esp_err_t i2s_channel_tune_rate(i2s_chan_handle_t handle, const i2s_tuning_confi
         return ESP_ERR_INVALID_ARG;
     }
     /* Set the new divider for MCLK */
-    I2S_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         if (handle->dir == I2S_DIR_TX) {
             i2s_ll_tx_set_mclk(handle->controller->hal.dev, &mclk_div);
 #if SOC_I2S_HW_VERSION_2

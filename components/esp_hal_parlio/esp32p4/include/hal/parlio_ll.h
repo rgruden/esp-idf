@@ -50,6 +50,7 @@
 
 #if HAL_CONFIG(CHIP_SUPPORT_MIN_REV) >= 300
 #define PARLIO_LL_TX_VALID_MAX_DELAY        32767
+#define PARLIO_LL_SUPPORT_TX_EOF_FROM_DMA   1   // Support to treat DMA EOF as TX unit EOF
 #endif
 
 #ifdef __cplusplus
@@ -319,8 +320,9 @@ static inline void parlio_ll_rx_start_soft_recv(parl_io_dev_t *dev, bool en)
 __attribute__((always_inline))
 static inline void parlio_ll_rx_set_sample_clock_edge(parl_io_dev_t *dev, parlio_sample_edge_t edge)
 {
-    dev->rx_clk_cfg.rx_clk_i_inv = edge;
-    dev->rx_clk_cfg.rx_clk_o_inv = edge;
+    bool invert = edge == PARLIO_SAMPLE_EDGE_NEG;
+    dev->rx_clk_cfg.rx_clk_i_inv = invert;
+    dev->rx_clk_cfg.rx_clk_o_inv = invert;
 }
 
 /**
@@ -628,8 +630,9 @@ static inline void parlio_ll_tx_start(parl_io_dev_t *dev, bool en)
  */
 static inline void parlio_ll_tx_set_sample_clock_edge(parl_io_dev_t *dev, parlio_sample_edge_t edge)
 {
-    dev->tx_clk_cfg.tx_clk_i_inv = edge;
-    dev->tx_clk_cfg.tx_clk_o_inv = edge;
+    bool invert = edge == PARLIO_SAMPLE_EDGE_NEG;
+    dev->tx_clk_cfg.tx_clk_i_inv = invert;
+    dev->tx_clk_cfg.tx_clk_o_inv = invert;
 }
 
 /**

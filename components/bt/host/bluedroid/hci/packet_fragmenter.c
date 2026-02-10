@@ -37,6 +37,7 @@
 #define START_PACKET_BOUNDARY 2
 #define CONTINUATION_PACKET_BOUNDARY 1
 #define L2CAP_HEADER_SIZE       4
+#define L2CAP_LENGTH_SIZE       2
 
 // TODO(zachoverflow): find good value for this
 #define NUMBER_OF_BUCKETS 42
@@ -78,6 +79,11 @@ static void fragment_and_dispatch(BT_HDR *packet)
 
     // We only fragment ACL packets
     if (event != MSG_STACK_TO_HC_HCI_ACL) {
+        callbacks->fragmented(packet, true);
+        return;
+    }
+    if (packet->len < HCI_ACL_PREAMBLE_SIZE) {
+        HCI_TRACE_ERROR("ACL packet too short for preamble (len=%u)", packet->len);
         callbacks->fragmented(packet, true);
         return;
     }
@@ -143,6 +149,11 @@ static void reassemble_and_dispatch(BT_HDR *packet)
         uint16_t l2cap_length;
         uint16_t acl_length __attribute__((unused));
 
+        if (packet->len < HCI_ACL_PREAMBLE_SIZE + L2CAP_LENGTH_SIZE) {
+            HCI_TRACE_ERROR("ACL packet too short (len=%u)\n", packet->len);
+            osi_free(packet);
+            return;
+        }
         STREAM_TO_UINT16(handle, stream);
         STREAM_TO_UINT16(acl_length, stream);
         STREAM_TO_UINT16(l2cap_length, stream);
@@ -159,6 +170,13 @@ static void reassemble_and_dispatch(BT_HDR *packet)
                 HCI_TRACE_WARNING("%s found unfinished packet for handle with start packet. Dropping old.\n", __func__);
                 hash_map_erase(partial_packets, (void *)(uintptr_t)handle);
                 osi_free(partial_packet);
+            }
+
+            /* Check for integer overflow in length calculation */
+            if (l2cap_length > (UINT16_MAX - L2CAP_HEADER_SIZE - HCI_ACL_PREAMBLE_SIZE)) {
+                HCI_TRACE_ERROR("L2CAP length too large: %u", l2cap_length);
+                osi_free(packet);
+                return;
             }
 
             uint16_t full_length = l2cap_length + L2CAP_HEADER_SIZE + HCI_ACL_PREAMBLE_SIZE;
@@ -200,6 +218,20 @@ static void reassemble_and_dispatch(BT_HDR *packet)
 
             packet->offset += HCI_ACL_PREAMBLE_SIZE; // skip ACL preamble
             packet->len -= HCI_ACL_PREAMBLE_SIZE;
+
+            // CVE-2020-0022 (BlueFrag) Fix: Prevent integer underflow
+            if (partial_packet->offset > partial_packet->len) {
+                HCI_TRACE_ERROR("%s offset exceeds expected length. Dropping packet.\n", __func__);
+                osi_free(packet);
+                return;
+            }
+
+            if (packet->len > UINT16_MAX - partial_packet->offset) {
+                HCI_TRACE_ERROR("%s: packet->len too large, would overflow. Dropping packet.\n", __func__);
+                osi_free(packet);
+                return;
+            }
+
             uint16_t projected_offset = partial_packet->offset + packet->len;
             if (projected_offset > partial_packet->len) { // len stores the expected length
                 HCI_TRACE_ERROR("%s got packet which would exceed expected length of %d. Truncating.\n", __func__, partial_packet->len);

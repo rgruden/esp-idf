@@ -667,6 +667,11 @@ static inline void emac_ll_receive_poll_demand(emac_dma_dev_t *dma_regs, uint32_
     dma_regs->dmarxpolldemand = val;
 }
 
+static inline uint32_t emac_ll_get_hw_feat(emac_dma_dev_t *dma_regs)
+{
+    return dma_regs->hwfeat;
+}
+
 /*************** End of dma regs operation *********************/
 
 /************** Start of ptp regs operation ********************/
@@ -694,6 +699,11 @@ static inline void emac_ll_ts_ptp_ether_enable(emac_ptp_dev_t *ptp_regs, bool en
 static inline void emac_ll_ts_ptp_snap_type_sel(emac_ptp_dev_t *ptp_regs, uint8_t sel)
 {
     ptp_regs->timestamp_ctrl.sel_snap_type = sel;
+}
+
+static inline void emac_ll_ts_mac_addr_filter_enable(emac_ptp_dev_t *ptp_regs, bool enable)
+{
+    ptp_regs->timestamp_ctrl.en_mac_addr_filter = enable;
 }
 
 static inline void emac_ll_ts_ptp_snap_master_only_enable(emac_ptp_dev_t *ptp_regs, bool enable)
@@ -838,7 +848,18 @@ static inline void emac_ll_ts_target_int_trig_enable(emac_ptp_dev_t *ptp_regs)
     ptp_regs->timestamp_ctrl.en_ts_int_trig = 1;
 }
 
+static inline void emac_ll_set_pps0_out_freq(emac_ptp_dev_t *ptp_regs, uint8_t freq_select)
+{
+    ptp_regs->pps_ctrl.pps_cmd0 = freq_select;
+}
+
 /************** End of ptp regs operation ********************/
+
+static inline soc_module_clk_t emac_ll_get_csr_clk_src(void)
+{
+    // Source of the ESP32P4 EMAC CRS clock is SYS clock.
+    return SOC_MOD_CLK_SYS;
+}
 
 /**
  * @brief Enable the bus clock for the EMAC module

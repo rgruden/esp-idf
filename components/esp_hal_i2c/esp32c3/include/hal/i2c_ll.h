@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -24,6 +24,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define I2C_LL_GET(_attr)       I2C_LL_ ## _attr
+
+#define I2C_LL_FIFO_LEN         32 /*!< I2C hardware FIFO depth */
+#define I2C_LL_CMD_REG_NUM      8  /*!< Number of I2C command registers */
+
+// FSM_RST only resets the FSM, not using it. So I2C_LL_SUPPORT_HW_FSM_RST not defined.
+#define I2C_LL_SUPPORT_HW_CLR_BUS            (1)  /*!< Support hardware clear bus */
 
 /**
  * @brief I2C hardware cmd register fields.
@@ -604,7 +611,7 @@ static inline void i2c_ll_get_rxfifo_cnt(i2c_dev_t *hw, uint32_t *length)
 __attribute__((always_inline))
 static inline void i2c_ll_get_txfifo_len(i2c_dev_t *hw, uint32_t *length)
 {
-    *length = SOC_I2C_FIFO_LEN - hw->sr.tx_fifo_cnt;
+    *length = I2C_LL_GET(FIFO_LEN) - hw->sr.tx_fifo_cnt;
 }
 
 /**
@@ -1000,6 +1007,8 @@ static inline i2c_slave_read_write_status_t i2c_ll_slave_get_read_write_status(i
 #define I2C_LL_SLAVE_RX_INT           (I2C_RXFIFO_WM_INT_ENA_M | I2C_TRANS_COMPLETE_INT_ENA_M)
 // I2C max timeout value
 #define I2C_LL_MAX_TIMEOUT I2C_TIME_OUT_REG_V
+// I2C max timeout period in clock cycles
+#define I2C_LL_MAX_TIMEOUT_PERIOD    (1UL << I2C_LL_MAX_TIMEOUT)
 
 #define I2C_LL_INTR_MASK          (0xffff) /*!< I2C all interrupt bitmap */
 

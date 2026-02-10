@@ -14,6 +14,10 @@
 #include "bta/bta_api.h"
 #endif
 
+#if CONFIG_BLE_MESH_COMPRESSED_LOG_ENABLE
+#include "log_compression/utils.h"
+#endif
+
 #include "btc_ble_mesh_agg_model.h"
 #include "btc_ble_mesh_brc_model.h"
 #include "btc_ble_mesh_df_model.h"
@@ -35,8 +39,6 @@
 #include "lpn.h"
 #include "rpl.h"
 #include "foundation.h"
-#include <tinycrypt/hmac.h>
-#include <tinycrypt/sha256.h>
 #include "mesh/buf.h"
 #include "mesh/slist.h"
 #include "mesh/config.h"
@@ -209,11 +211,6 @@ void bt_mesh_ext_memcpy_swap(void *dst, const void *src, size_t length)
 void bt_mesh_ext_mem_swap(void *buf, size_t length)
 {
     sys_mem_swap(buf, length);
-}
-
-uint32_t bt_mesh_ext_log_timestamp(void)
-{
-    return esp_log_timestamp();
 }
 
 /* Net buf */
@@ -567,24 +564,9 @@ int bt_mesh_ext_net_decrypt(const uint8_t key[16], struct net_buf_simple *buf,
     return bt_mesh_net_decrypt(key, buf, iv_index, proxy, proxy_solic);
 }
 
-int bt_mesh_ext_tc_hmac_set_key(void *ctx, const uint8_t *key, unsigned int key_size)
+int bt_mesh_ext_hmac_sha_256(const uint8_t key[32], struct bt_mesh_sg *sg, size_t sg_len, uint8_t mac[32])
 {
-    return tc_hmac_set_key(ctx, key, key_size);
-}
-
-int bt_mesh_ext_tc_hmac_init(void *ctx)
-{
-    return tc_hmac_init(ctx);
-}
-
-int bt_mesh_ext_tc_hmac_update(void *ctx, const void *data, unsigned int data_length)
-{
-    return tc_hmac_update(ctx, data, data_length);
-}
-
-int bt_mesh_ext_tc_hmac_final(uint8_t *tag, unsigned int taglen, void *ctx)
-{
-    return tc_hmac_final(tag, taglen, ctx);
+    return bt_mesh_sha256_hmac_raw_key(key, sg, sg_len, mac);
 }
 
 /* Mutex */
@@ -1757,6 +1739,9 @@ uint8_t *bt_mesh_ext_prov_link_get_record(void *link, uint16_t id)
 uint8_t *bt_mesh_ext_prov_link_alloc_record(void *link, uint16_t id, uint16_t len)
 {
 #if (CONFIG_BLE_MESH_PROVISIONER && CONFIG_BLE_MESH_CERT_BASED_PROV)
+    if (id >= BLE_MESH_REC_MAX_ID) {
+        return NULL;
+    }
     LINK(link)->records[id] = bt_mesh_calloc(len * sizeof(uint8_t));
     return LINK(link)->records[id];
 #else
@@ -4279,12 +4264,6 @@ static const bt_mesh_ext_config_t bt_mesh_ext_cfg = {
     .struct_addr_off_val                            = offsetof(bt_mesh_addr_t, val),
     .struct_sg_size                                 = sizeof(struct bt_mesh_sg),
     .struct_sg_off_len                              = offsetof(struct bt_mesh_sg, len),
-    .struct_tc_sha256_state                         = sizeof(struct tc_sha256_state_struct),
-    .struct_tc_sha256_off_bits_hashed               = offsetof(struct tc_sha256_state_struct, bits_hashed),
-    .struct_tc_sha256_off_leftover                  = offsetof(struct tc_sha256_state_struct, leftover),
-    .struct_tc_sha256_off_leftover_offset           = offsetof(struct tc_sha256_state_struct, leftover_offset),
-    .struct_tc_hmac_state_size                      = sizeof(struct tc_hmac_state_struct),
-    .struct_tc_hmac_state_off_key                   = offsetof(struct tc_hmac_state_struct, key),
 
     .btc_ble_mesh_evt_agg_client_send_timeout                   = BTC_BLE_MESH_EVT_AGG_CLIENT_SEND_TIMEOUT,
     .btc_ble_mesh_evt_agg_client_recv_rsp                       = BTC_BLE_MESH_EVT_AGG_CLIENT_RECV_RSP,
@@ -4963,15 +4942,6 @@ static const bt_mesh_ext_funcs_t bt_mesh_ext_func = {
 #define BLE_MESH_LOG_FORMAT_START(level)   LOG_COLOR_ ## level #level " (%" PRIu32 ") %s: "
 #define BLE_MESH_LOG_FORMAT_END            LOG_RESET_COLOR "\n"
 
-typedef void (*logger_func_t)(const char *format, ...);
-
-typedef struct {
-    logger_func_t error;
-    logger_func_t warn;
-    logger_func_t info;
-    logger_func_t debug;
-} bt_mesh_lib_ext_log_env_t;
-
 void bt_mesh_lib_log_error(const char *format, ...)
 {
 #if (CONFIG_BLE_MESH_NO_LOG ||\
@@ -5056,17 +5026,41 @@ void bt_mesh_lib_log_debug(const char *format, ...)
 #endif
 }
 
-static bt_mesh_lib_ext_log_env_t bt_mesh_ext_log_env = {
-    .error = bt_mesh_lib_log_error,
-    .warn = bt_mesh_lib_log_warn,
-    .info = bt_mesh_lib_log_info,
-    .debug = bt_mesh_lib_log_debug,
-};
-
-int bt_mesh_ext_log_init(void)
+void ble_mesh_lib_compressed_out(uint8_t log_level, uint32_t log_index, size_t arg_cnt, ...)
 {
-    return bt_mesh_lib_log_env_init(&bt_mesh_ext_log_env,
-                                    sizeof(bt_mesh_lib_ext_log_env_t));
+#if CONFIG_BLE_MESH_COMPRESSED_LOG_ENABLE
+    if (BLE_MESH_LOG_LEVEL >= log_level) {
+        va_list args = {0};
+        va_start(args, arg_cnt);
+        extern int ble_log_compressed_hex_printv(uint8_t source, uint32_t log_index, size_t args_cnt, va_list args);
+        ble_log_compressed_hex_printv(BLE_COMPRESSED_LOG_OUT_SOURCE_MESH_LIB, log_index, arg_cnt, args);
+        va_end(args);
+    }
+#endif
+    return;
+}
+
+void ble_mesh_lib_compressed_buf_out(uint8_t log_level, uint32_t log_index, uint8_t buf_idx, const uint8_t *buf, uint8_t len)
+{
+#if CONFIG_BLE_MESH_COMPRESSED_LOG_ENABLE
+    if (BLE_MESH_LOG_LEVEL >= log_level) {
+        extern int ble_log_compressed_hex_print_buf(uint8_t source, uint32_t log_index, uint8_t buf_idx, const uint8_t *buf, size_t len);
+        ble_log_compressed_hex_print_buf(BLE_COMPRESSED_LOG_OUT_SOURCE_MESH_LIB, log_index, buf_idx, buf, len);
+    }
+#endif
+    return;
+}
+
+/**
+ * @brief  Keep symbols alive.
+ * @note   Dummy function to stop the linker from
+ *         optimizing away unused code.The dummy
+ *         function is discarded after linking,
+ *         so it adds zero bytes to the final binary.
+ */
+void bt_mesh_lib_ext_func_dummy_call(void)
+{
+    (void *)bt_hex(NULL, 0);
 }
 
 int bt_mesh_v11_ext_init(void)

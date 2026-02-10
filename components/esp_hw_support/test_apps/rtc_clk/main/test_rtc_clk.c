@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,8 +10,6 @@
 #include "esp_attr.h"
 #include "soc/soc_caps.h"
 #include "soc/rtc.h"
-#include "soc/rtc_periph.h"
-#include "soc/gpio_periph.h"
 #include "hal/gpio_ll.h"
 #include "soc/io_mux_reg.h"
 #include "driver/rtc_io.h"
@@ -52,9 +50,13 @@ TEST_CASE("RTC_SLOW_CLK sources calibration", "[rtc_clk]")
     rtc_clk_32k_enable(true);
 #endif
 
+#if SOC_CLK_RC_FAST_D256_SUPPORTED
+    rtc_clk_8m_enable(true, true);
+#endif
+
     // By default Kconfig, RTC_SLOW_CLK source is RC_SLOW
     soc_rtc_slow_clk_src_t default_rtc_slow_clk_src = rtc_clk_slow_src_get();
-    CALIBRATE_ONE(CLK_CAL_RTC_SLOW);
+    TEST_ASSERT_NOT_EQUAL(0, CALIBRATE_ONE(CLK_CAL_RTC_SLOW));
 #if SOC_CLK_RC_FAST_D256_SUPPORTED
     CALIBRATE_ONE(CLK_CAL_RC_FAST_D256);
 #endif
@@ -68,7 +70,7 @@ TEST_CASE("RTC_SLOW_CLK sources calibration", "[rtc_clk]")
         rtc_clk_slow_src_set(SOC_RTC_SLOW_CLK_SRC_XTAL32K);
         printf("done\n");
 
-        CALIBRATE_ONE(CLK_CAL_RTC_SLOW);
+        TEST_ASSERT_NOT_EQUAL(0, CALIBRATE_ONE(CLK_CAL_RTC_SLOW));
 #if SOC_CLK_RC_FAST_D256_SUPPORTED
         CALIBRATE_ONE(CLK_CAL_RC_FAST_D256);
 #endif
@@ -81,7 +83,7 @@ TEST_CASE("RTC_SLOW_CLK sources calibration", "[rtc_clk]")
     rtc_clk_slow_src_set(SOC_RTC_SLOW_CLK_SRC_RC_FAST_D256);
     printf("done\n");
 
-    CALIBRATE_ONE(CLK_CAL_RTC_SLOW);
+    TEST_ASSERT_NOT_EQUAL(0, CALIBRATE_ONE(CLK_CAL_RTC_SLOW));
     CALIBRATE_ONE(CLK_CAL_RC_FAST_D256);
 #if SOC_CLK_XTAL32K_SUPPORTED
     CALIBRATE_ONE(CLK_CAL_32K_XTAL);
@@ -98,7 +100,7 @@ TEST_CASE("RTC_SLOW_CLK sources calibration", "[rtc_clk]")
         rtc_clk_slow_src_set(SOC_RTC_SLOW_CLK_SRC_OSC_SLOW);
         printf("done\n");
 
-        CALIBRATE_ONE(CLK_CAL_RTC_SLOW);
+        TEST_ASSERT_NOT_EQUAL(0, CALIBRATE_ONE(CLK_CAL_RTC_SLOW));
 #if SOC_CLK_RC_FAST_D256_SUPPORTED
         CALIBRATE_ONE(CLK_CAL_RC_FAST_D256);
 #endif
@@ -245,7 +247,7 @@ static void start_freq(soc_rtc_slow_clk_src_t required_src, uint32_t start_delay
             printf("PASS. Time measurement...");
         }
         uint32_t fail_measure = 0;
-#if SOC_LP_TIMER_SUPPORTED
+#if SOC_RTC_TIMER_V2_SUPPORTED
         uint64_t clk_rtc_time;
         for (int j = 0; j < 3; ++j) {
             clk_rtc_time = esp_clk_rtc_time();
@@ -336,7 +338,7 @@ TEST_CASE("Test starting 'External 32kHz XTAL' on the board without it.", "[rtc_
 #endif // !defined(CONFIG_IDF_CI_BUILD) || !CONFIG_SPIRAM_BANKSWITCH_ENABLE
 #endif // SOC_CLK_XTAL32K_SUPPORTED
 
-#if SOC_LP_TIMER_SUPPORTED
+#if SOC_RTC_TIMER_V2_SUPPORTED
 TEST_CASE("Test rtc clk calibration compensation", "[rtc_clk]")
 {
     int64_t t1 = esp_rtc_get_time_us();
@@ -372,9 +374,13 @@ RTC_NOINIT_ATTR
 #if CONFIG_IDF_TARGET_ESP32C2
 #define TEMP_RTC_STORE_REG          RTC_CNTL_DATE_REG
 #define TEMP_RTC_STORE_REG_M        RTC_CNTL_DATE_M
-#elif CONFIG_IDF_TARGET_ESP32C61 || CONFIG_IDF_TARGET_ESP32H4
+#elif CONFIG_IDF_TARGET_ESP32C61
 #define TEMP_RTC_STORE_REG          LP_AON_DATE_REG
 #define TEMP_RTC_STORE_REG_M        LP_AON_DATE_M
+#elif CONFIG_IDF_TARGET_ESP32H4
+#include "soc/pmu_reg.h"
+#define TEMP_RTC_STORE_REG          PMU_DATE_REG
+#define TEMP_RTC_STORE_REG_M        PMU_PMU_DATE_M
 #endif
 #endif
 static int64_t start = 0;
@@ -448,7 +454,7 @@ TEST_CASE_MULTIPLE_STAGES("Test rtc clk calibration compensation across deep sle
  * output either 150k, 32k, 8M clock to GPIO25.
  */
 #if CONFIG_IDF_TARGET_ESP32
-
+#include "soc/rtc_io_reg.h"
 #include "soc/sens_reg.h"
 
 static void pull_out_clk(int sel)

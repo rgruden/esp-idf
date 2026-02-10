@@ -44,7 +44,7 @@ else()
         list(APPEND sources "patches/esp_rom_multi_heap.c")
     endif()
 
-    list(APPEND private_required_comp soc hal)
+    list(APPEND private_required_comp soc hal esp_hal_uart)
 endif()
 
 if(CONFIG_IDF_TARGET_ARCH_XTENSA)
@@ -97,8 +97,7 @@ if(target STREQUAL "linux")
         target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-integer-overflow -Wno-shift-count-overflow)
     endif()
 else()
-    # TODO: IDF-13410. Update to (CONFIG_ESP32P4_REV_MIN_FULL GREATER_EQUAL 200) when chip efuse is correct.
-    if(CONFIG_ESP32P4_REV_MIN_300)
+    if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
         target_linker_script(${COMPONENT_LIB} INTERFACE "${target_folder}/${ld_folder}/${target}.rom.eco5.ld")
     elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
         target_linker_script(${COMPONENT_LIB} INTERFACE "${target_folder}/${ld_folder}/${target}.rom.beta5.ld")
@@ -113,7 +112,7 @@ else()
     endif()
 
     if(CONFIG_COMPILER_FLOAT_LIB_FROM_GCCLIB)
-        if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410
+        if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
             rom_linker_script("eco5.libgcc")
         elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
             rom_linker_script("beta5.libgcc")
@@ -121,7 +120,7 @@ else()
             rom_linker_script("libgcc")
         endif()
     else()
-        if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410.
+        if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
             rom_linker_script("eco5.rvfp")
         else()
             rom_linker_script("rvfp")
@@ -130,14 +129,6 @@ else()
 endif()
 
 # Common API which is linked both for bootloader and app builds
-
-if(CONFIG_HAL_WDT_USE_ROM_IMPL)
-    if(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
-        rom_linker_script("beta5.wdt")
-    else()
-        rom_linker_script("wdt")
-    endif()
-endif()
 
 if(CONFIG_HAL_SYSTIMER_USE_ROM_IMPL)
     if(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
@@ -153,7 +144,7 @@ endif()
 
 if(ESP_TEE_BUILD)
     rom_linker_script("heap")
-    if(CONFIG_ESP_ROM_HAS_NEWLIB_NANO_FORMAT)
+    if(CONFIG_LIBC_NEWLIB AND CONFIG_ESP_ROM_HAS_NEWLIB_NANO_FORMAT)
         rom_linker_script("newlib-nano")
     endif()
     rom_linker_script("libc")
@@ -176,7 +167,7 @@ if(BOOTLOADER_BUILD)
         if(target STREQUAL "esp32" OR target STREQUAL "esp32s2")
             rom_linker_script("libc-funcs")
         else()
-            if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410
+            if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
                 rom_linker_script("eco5.libc")
             elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
                 rom_linker_script("beta5.libc")
@@ -188,7 +179,7 @@ if(BOOTLOADER_BUILD)
                 rom_linker_script("libc-suboptimal_for_misaligned_mem")
             endif()
             if(CONFIG_LIBC_NEWLIB)
-                if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410
+                if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
                     rom_linker_script("eco5.newlib")
                 elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
                     rom_linker_script("beta5.newlib")
@@ -330,6 +321,9 @@ else() # Regular app build
         rom_linker_script("coexist")
         rom_linker_script("net80211")
         rom_linker_script("pp")
+        if(CONFIG_ESP32C5_REV_MIN_FULL GREATER_EQUAL 102)
+            rom_linker_script("eco3")
+        endif()
     elseif(target STREQUAL "esp32c61")
         # esp32c61.rom.api.ld has been split to several lds by components.
         # esp32c61.rom.api.ld is still reserved to map the APIs
@@ -337,12 +331,14 @@ else() # Regular app build
         rom_linker_script("coexist")
         rom_linker_script("net80211")
         rom_linker_script("pp")
+        if(CONFIG_ESP32C61_REV_MIN_FULL GREATER_EQUAL 101)
+            rom_linker_script("eco4")
+        endif()
     endif()
-
 
     if(CONFIG_ESP_ROM_HAS_NEWLIB AND NOT target STREQUAL "esp32" AND NOT target STREQUAL "esp32s2")
         # ESP32 and S2 are a bit different, keep them as special cases in the target specific include section
-        if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410
+        if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
             rom_linker_script("eco5.libc")
         elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
             rom_linker_script("beta5.libc")
@@ -353,7 +349,7 @@ else() # Regular app build
             rom_linker_script("libc-suboptimal_for_misaligned_mem")
         endif()
         if(CONFIG_LIBC_NEWLIB)
-            if(CONFIG_ESP32P4_REV_MIN_300) # TODO: IDF-13410
+            if(CONFIG_IDF_TARGET_ESP32P4 AND NOT CONFIG_ESP32P4_SELECTS_REV_LESS_V3)
                 rom_linker_script("eco5.newlib")
             elseif(CONFIG_IDF_TARGET_ESP32H4 AND NOT CONFIG_ESP32H4_SELECTS_REV_MP) # TODO: ESP32H4 IDF-13835
                 rom_linker_script("beta5.newlib")

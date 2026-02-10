@@ -266,7 +266,7 @@ def check_test_scripts(
 
         if manifest_targets == actual_targets:
             continue
-        if not (set(manifest_targets) - set(actual_targets + (bypass_targets or []))):
+        if not ((set(manifest_targets) ^ set(actual_targets)) - set(bypass_targets or [])):
             continue
 
         print(f'Test target MISMATCH!!!: {app_dir}')
@@ -340,6 +340,7 @@ if __name__ == '__main__':
             os.path.join(IDF_PATH, 'tools', 'test_build_system', 'build_test_app'),
             os.path.join(IDF_PATH, 'tools', 'test_build_system', 'buildv2_test_app'),
             os.path.join(IDF_PATH, 'tools', 'templates', 'sample_project'),
+            os.path.join(IDF_PATH, 'tools', 'cmakev2', 'test'),
         ]
     else:
         _exclude_dirs = [os.path.join(IDF_PATH, 'tools', 'templates', 'sample_project')]

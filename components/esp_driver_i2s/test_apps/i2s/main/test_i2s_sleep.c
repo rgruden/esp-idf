@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,7 +13,7 @@
 #include "driver/i2s_std.h"
 #include "driver/uart.h"
 #include "soc/i2s_struct.h"
-#include "soc/soc_caps_full.h"
+#include "soc/soc_caps.h"
 #include "esp_sleep.h"
 #include "esp_private/sleep_cpu.h"
 #include "esp_private/esp_sleep_internal.h"
@@ -43,7 +43,7 @@ static void s_test_i2s_enter_light_sleep(int sec, bool allow_power_down)
     printf("Woke up from light sleep\n");
 
     TEST_ASSERT_EQUAL(0, sleep_ctx.sleep_request_result);
-#if SOC_HAS(PAU) && !SOC_PM_TOP_PD_NOT_ALLOWED
+#if SOC_HAS(PAU)
     // check if the power domain also is powered down
     TEST_ASSERT_EQUAL(allow_power_down ? PMU_SLEEP_PD_TOP : 0, (sleep_ctx.sleep_flags) & PMU_SLEEP_PD_TOP);
 #endif

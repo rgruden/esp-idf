@@ -17,14 +17,6 @@
 #include "p_256_ecc_pp.h"
 #include "osi/future.h"
 #include "device/controller.h"
-
-#if CONFIG_MBEDTLS_HARDWARE_AES
-#include "mbedtls/aes.h"
-#endif
-
-#include <tinycrypt/aes.h>
-#include <tinycrypt/constants.h>
-
 #include "mesh/hci.h"
 #include "mesh/adapter.h"
 #include "mesh/common.h"
@@ -55,10 +47,6 @@ struct bt_mesh_dev bt_mesh_dev;
  * it will manage it in the BTM layer.
  */
 #define BLE_MESH_DEV    0
-
-/* P-256 Variables */
-static uint8_t bt_mesh_public_key[64];
-static uint8_t bt_mesh_private_key[32];
 
 /* Scan related functions */
 static bt_mesh_scan_cb_t *bt_mesh_scan_dev_found_cb;
@@ -297,6 +285,10 @@ static bool bt_mesh_scan_result_process(tBTM_BLE_EXT_ADV_REPORT *ext_adv_report)
     switch (ext_adv_report->data_status) {
     case BTM_BLE_EXT_ADV_DATA_COMPLETE:
         if (adv_report_cache.adv_data_len) {
+            if (adv_report_cache.adv_data_len + ext_adv_report->adv_data_len > BLE_MESH_GAP_ADV_MAX_LEN) {
+                memset(&adv_report_cache, 0, sizeof(adv_report_cache));
+                return false;
+            }
             memcpy(adv_report_cache.adv_data + adv_report_cache.adv_data_len,
                    ext_adv_report->adv_data, ext_adv_report->adv_data_len);
             adv_report_cache.adv_data_len += ext_adv_report->adv_data_len;
@@ -589,7 +581,7 @@ static int start_le_scan(uint8_t scan_type, uint16_t interval, uint16_t window,
 
     ext_scan_params.coded_cfg.scan_type = scan_type;
     ext_scan_params.coded_cfg.scan_interval = interval;
-    ext_scan_params.coded_cfg.scan_window = interval - window;
+    ext_scan_params.coded_cfg.scan_window = MAX(interval - window, BTM_BLE_SCAN_WIN_MIN);
 
     BTA_DmBleGapSetExtScanParams(&ext_scan_params);
 
@@ -769,7 +761,7 @@ int bt_le_ext_adv_start(const uint8_t inst_id,
      * Clearing sd is done by calling set_adv_data() with NULL data and zero len.
      * So following condition check is unusual but correct.
      */
-    if (sd && (param->options & BLE_MESH_ADV_OPT_CONNECTABLE)) {
+    if (sd) {
         err = set_adv_data(BLE_MESH_HCI_OP_SET_SCAN_RSP_DATA, inst_id, sd, sd_len);
         if (err) {
             BT_ERR("Failed to set scan rsp data err %d", err);
@@ -833,7 +825,7 @@ int bt_le_adv_start(const struct bt_mesh_adv_param *param,
      * Clearing sd is done by calling set_adv_data() with NULL data and zero len.
      * So following condition check is unusual but correct.
      */
-    if (sd && (param->options & BLE_MESH_ADV_OPT_CONNECTABLE)) {
+    if (sd) {
         err = set_adv_data(BLE_MESH_HCI_OP_SET_SCAN_RSP_DATA, sd, sd_len);
         if (err) {
             BT_ERR("Failed to set scan rsp data, err %d", err);
@@ -1169,7 +1161,7 @@ static void bt_mesh_bta_gatts_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
 
         BT_DBG("gatts read, handle %d", p_data->req_data.p_data->read_req.handle);
 
-        if (attr != NULL && attr->read != NULL) {
+        if (attr != NULL && attr->read != NULL && index < ARRAY_SIZE(bt_mesh_gatts_conn)) {
             if ((len = attr->read(&bt_mesh_gatts_conn[index], attr, buf, 100,
                                   p_data->req_data.p_data->read_req.offset)) > 0) {
                 rsp.attr_value.handle = p_data->req_data.p_data->read_req.handle;
@@ -1193,7 +1185,7 @@ static void bt_mesh_bta_gatts_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
                p_data->req_data.p_data->write_req.len,
                bt_hex(p_data->req_data.p_data->write_req.value, p_data->req_data.p_data->write_req.len));
 
-        if (attr != NULL && attr->write != NULL) {
+        if (attr != NULL && attr->write != NULL && index < ARRAY_SIZE(bt_mesh_gatts_conn)) {
             if ((len = attr->write(&bt_mesh_gatts_conn[index], attr,
                                    p_data->req_data.p_data->write_req.value,
                                    p_data->req_data.p_data->write_req.len,
@@ -1400,18 +1392,25 @@ ssize_t bt_mesh_gatts_attr_read_included(struct bt_mesh_conn *conn,
                                          void *buf, uint16_t len, uint16_t offset)
 {
     struct bt_mesh_gatt_attr *incl = attr->user_data;
-    struct bt_mesh_uuid *uuid = incl->user_data;
+    struct bt_mesh_gatt_attr *next_svc_start = NULL;
+    struct bt_mesh_uuid *uuid = NULL;
     struct gatts_incl pdu = {0};
     uint8_t value_len = 0U;
 
+    assert(incl);
+
     /* First attr points to the start handle */
     pdu.start_handle = sys_cpu_to_le16(incl->handle);
+    next_svc_start = bt_mesh_gatts_attr_next(incl);
+    pdu.end_handle = sys_cpu_to_le16(next_svc_start ? next_svc_start->handle - 1 : incl->handle);
     value_len = sizeof(pdu.start_handle) + sizeof(pdu.end_handle);
 
     /*
      * Core 4.2, Vol 3, Part G, 3.2,
      * The Service UUID shall only be present when the UUID is a 16-bit Bluetooth UUID.
      */
+    uuid = incl->user_data;
+
     if (uuid->type == BLE_MESH_UUID_TYPE_16) {
         pdu.uuid16 = sys_cpu_to_le16(BLE_MESH_UUID_16(uuid)->val);
         value_len += sizeof(pdu.uuid16);
@@ -1564,7 +1563,9 @@ static tBTA_GATT_PERM bt_mesh_perm_to_bta_perm(uint8_t perm)
 
 int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
 {
+    bool service_created = false;
     tBT_UUID bta_uuid = {0};
+    int service_idx = -1;
 
     assert(svc != NULL);
 
@@ -1578,8 +1579,10 @@ int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
                                         &bta_uuid, 0, svc->attr_count, true);
                 if (future_await(gatts_future_mesh) == FUTURE_FAIL) {
                     BT_ERR("Failed to add primary service");
-                    return ESP_FAIL;
+                    goto cleanup;
                 }
+                service_created = true;
+                service_idx = i;
                 svc->attrs[i].handle = svc_handle;
                 BT_DBG("Add primary service, uuid 0x%04x, perm %d, handle %d",
                         bta_uuid.uu.uuid16, svc->attrs[i].perm, svc_handle);
@@ -1592,8 +1595,10 @@ int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
                                         &bta_uuid, 0, svc->attr_count, false);
                 if (future_await(gatts_future_mesh) == FUTURE_FAIL) {
                     BT_ERR("Failed to add secondary service");
-                    return ESP_FAIL;
+                    goto cleanup;
                 }
+                service_created = true;
+                service_idx = i;
                 svc->attrs[i].handle = svc_handle;
                 BT_DBG("Add secondary service, uuid 0x%04x, perm %d, handle %d",
                         bta_uuid.uu.uuid16, svc->attrs[i].perm, svc_handle);
@@ -1609,7 +1614,7 @@ int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
                 BTA_GATTS_AddCharacteristic(svc_handle, &bta_uuid, bt_mesh_perm_to_bta_perm(svc->attrs[i + 1].perm), gatts_chrc->properties, NULL, NULL);
                 if (future_await(gatts_future_mesh) == FUTURE_FAIL) {
                     BT_ERR("Failed to add characteristic");
-                    return ESP_FAIL;
+                    goto cleanup;
                 }
                 /* All the characteristic should have two handles: the declaration handle and the value handle */
                 svc->attrs[i].handle = char_handle - 1;
@@ -1634,7 +1639,7 @@ int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
                 BTA_GATTS_AddCharDescriptor(svc_handle, bt_mesh_perm_to_bta_perm(svc->attrs[i].perm), &bta_uuid, NULL, NULL);
                 if (future_await(gatts_future_mesh) == FUTURE_FAIL) {
                     BT_ERR("Failed to add descriptor");
-                    return ESP_FAIL;
+                    goto cleanup;
                 }
                 svc->attrs[i].handle = char_handle;
                 BT_DBG("Add descriptor, uuid 0x%04x, perm %d, handle %d",
@@ -1653,6 +1658,13 @@ int bt_mesh_gatts_service_register(struct bt_mesh_gatt_service *svc)
 
     gatts_register(svc);
     return 0;
+
+cleanup:
+    if (service_created && service_idx >= 0) {
+        BTA_GATTS_DeleteService(svc->attrs[service_idx].handle);
+        svc->attrs[service_idx].handle = 0;
+    }
+    return -EIO;
 }
 
 int bt_mesh_gatts_service_deregister(struct bt_mesh_gatt_service *svc)
@@ -1742,7 +1754,13 @@ int bt_mesh_gatts_service_start(struct bt_mesh_gatt_service *svc)
 
 int bt_mesh_gatts_set_local_device_name(const char *name)
 {
-    BTM_SetLocalDeviceName((char *)name, BT_DEVICE_TYPE_BLE);
+    tBTM_STATUS status = BTM_SUCCESS;
+
+    status = BTM_SetLocalDeviceName((char *)name, BT_DEVICE_TYPE_BLE);
+    if (status != BTM_NO_RESOURCES) {
+        BT_ERR("SetLocalDevNameFail[%d]", status);
+        return -EIO;
+    }
 
     return 0;
 }
@@ -1894,7 +1912,7 @@ int bt_mesh_gattc_conn_create(const bt_mesh_addr_t *addr, uint16_t service_uuid)
                        BTA_BLE_PHY_1M_MASK, &conn_1m_param, NULL, NULL);
 #endif /* CONFIG_BLE_MESH_USE_BLE_50 */
 
-    return 0;
+    return i;
 }
 
 void bt_mesh_gattc_exchange_mtu(uint8_t index)
@@ -2481,185 +2499,9 @@ void bt_mesh_gatt_deinit(void)
 
 void bt_mesh_adapt_init(void)
 {
-    /* initialization of P-256 parameters */
-    p_256_init_curve(KEY_LENGTH_DWORDS_P256);
-
-    /* Set "bt_mesh_dev.flags" to 0 (only the "BLE_MESH_DEV_HAS_PUB_KEY"
-     * flag is used) here, because we need to make sure each time after
-     * the private key is initialized, a corresponding public key must
-     * be generated.
-     */
+    /* Use unified crypto module initialization */
+    bt_mesh_crypto_init();
     bt_mesh_atomic_set(bt_mesh_dev.flags, 0);
-    bt_mesh_rand(bt_mesh_private_key, sizeof(bt_mesh_private_key));
-}
-
-void bt_mesh_set_private_key(const uint8_t pri_key[32])
-{
-    memcpy(bt_mesh_private_key, pri_key, 32);
-}
-
-const uint8_t *bt_mesh_pub_key_get(void)
-{
-    uint8_t private_key[32] = {0};
-    Point public_key = {0};
-
-    if (bt_mesh_atomic_test_bit(bt_mesh_dev.flags, BLE_MESH_DEV_HAS_PUB_KEY)) {
-        return bt_mesh_public_key;
-    }
-
-    /* BLE Mesh BQB test case MESH/NODE/PROV/UPD/BV-12-C requires
-     * different public key for each provisioning procedure.
-     * Note: if enabled, when Provisioner provision multiple devices
-     * at the same time, this may cause invalid confirmation value.
-     *
-     * Use the following code for generating different private key
-     * for each provisioning procedure.
-     *
-     * if (bt_mesh_rand(bt_mesh_private_key, BT_OCTET32_LEN)) {
-     *    BT_ERR("%s, Unable to generate bt_mesh_private_key", __func__);
-     *    return NULL;
-     * }
-     */
-
-    memcpy(private_key, bt_mesh_private_key, BT_OCTET32_LEN);
-    ECC_PointMult(&public_key, &(curve_p256.G), (DWORD *)private_key, KEY_LENGTH_DWORDS_P256);
-
-    memcpy(bt_mesh_public_key, public_key.x, BT_OCTET32_LEN);
-    memcpy(bt_mesh_public_key + BT_OCTET32_LEN, public_key.y, BT_OCTET32_LEN);
-
-    bt_mesh_atomic_set_bit(bt_mesh_dev.flags, BLE_MESH_DEV_HAS_PUB_KEY);
-
-    BT_DBG("Public Key %s", bt_hex(bt_mesh_public_key, sizeof(bt_mesh_public_key)));
-
-    return bt_mesh_public_key;
-}
-
-bool bt_mesh_check_public_key(const uint8_t key[64])
-{
-    struct p256_pub_key {
-        uint8_t x[32];
-        uint8_t y[32];
-    } check = {0};
-
-    sys_memcpy_swap(check.x, key, 32);
-    sys_memcpy_swap(check.y, key + 32, 32);
-
-    return ECC_CheckPointIsInElliCur_P256((Point *)&check);
-}
-
-int bt_mesh_dh_key_gen(const uint8_t remote_pub_key[64], uint8_t dhkey[32])
-{
-    uint8_t private_key[32] = {0};
-    Point peer_pub_key = {0};
-    Point new_pub_key = {0};
-
-    BT_DBG("private key = %s", bt_hex(bt_mesh_private_key, BT_OCTET32_LEN));
-
-    memcpy(private_key, bt_mesh_private_key, BT_OCTET32_LEN);
-    memcpy(peer_pub_key.x, remote_pub_key, BT_OCTET32_LEN);
-    memcpy(peer_pub_key.y, &remote_pub_key[BT_OCTET32_LEN], BT_OCTET32_LEN);
-
-    BT_DBG("remote public key x = %s", bt_hex(peer_pub_key.x, BT_OCTET32_LEN));
-    BT_DBG("remote public key y = %s", bt_hex(peer_pub_key.y, BT_OCTET32_LEN));
-
-    ECC_PointMult(&new_pub_key, &peer_pub_key, (DWORD *)private_key, KEY_LENGTH_DWORDS_P256);
-
-    BT_DBG("new public key x = %s", bt_hex(new_pub_key.x, 32));
-    BT_DBG("new public key y = %s", bt_hex(new_pub_key.y, 32));
-
-    memcpy(dhkey, new_pub_key.x, 32);
-
-    return 0;
-}
-
-int bt_mesh_encrypt_le(const uint8_t key[16], const uint8_t plaintext[16],
-                       uint8_t enc_data[16])
-{
-    uint8_t tmp[16] = {0};
-
-    BT_DBG("key %s plaintext %s", bt_hex(key, 16), bt_hex(plaintext, 16));
-
-#if CONFIG_MBEDTLS_HARDWARE_AES
-    mbedtls_aes_context ctx = {0};
-
-    mbedtls_aes_init(&ctx);
-
-    sys_memcpy_swap(tmp, key, 16);
-
-    if (mbedtls_aes_setkey_enc(&ctx, tmp, 128) != 0) {
-        mbedtls_aes_free(&ctx);
-        return -EINVAL;
-    }
-
-    sys_memcpy_swap(tmp, plaintext, 16);
-
-    if (mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_ENCRYPT,
-                              tmp, enc_data) != 0) {
-        mbedtls_aes_free(&ctx);
-        return -EINVAL;
-    }
-
-    mbedtls_aes_free(&ctx);
-#else /* CONFIG_MBEDTLS_HARDWARE_AES */
-    struct tc_aes_key_sched_struct s = {0};
-
-    sys_memcpy_swap(tmp, key, 16);
-
-    if (tc_aes128_set_encrypt_key(&s, tmp) == TC_CRYPTO_FAIL) {
-        return -EINVAL;
-    }
-
-    sys_memcpy_swap(tmp, plaintext, 16);
-
-    if (tc_aes_encrypt(enc_data, tmp, &s) == TC_CRYPTO_FAIL) {
-        return -EINVAL;
-    }
-#endif /* CONFIG_MBEDTLS_HARDWARE_AES */
-
-    sys_mem_swap(enc_data, 16);
-
-    BT_DBG("enc_data %s", bt_hex(enc_data, 16));
-
-    return 0;
-}
-
-int bt_mesh_encrypt_be(const uint8_t key[16], const uint8_t plaintext[16],
-                       uint8_t enc_data[16])
-{
-    BT_DBG("key %s plaintext %s", bt_hex(key, 16), bt_hex(plaintext, 16));
-
-#if CONFIG_MBEDTLS_HARDWARE_AES
-    mbedtls_aes_context ctx = {0};
-
-    mbedtls_aes_init(&ctx);
-
-    if (mbedtls_aes_setkey_enc(&ctx, key, 128) != 0) {
-        mbedtls_aes_free(&ctx);
-        return -EINVAL;
-    }
-
-    if (mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_ENCRYPT,
-                              plaintext, enc_data) != 0) {
-        mbedtls_aes_free(&ctx);
-        return -EINVAL;
-    }
-
-    mbedtls_aes_free(&ctx);
-#else /* CONFIG_MBEDTLS_HARDWARE_AES */
-    struct tc_aes_key_sched_struct s = {0};
-
-    if (tc_aes128_set_encrypt_key(&s, key) == TC_CRYPTO_FAIL) {
-        return -EINVAL;
-    }
-
-    if (tc_aes_encrypt(enc_data, plaintext, &s) == TC_CRYPTO_FAIL) {
-        return -EINVAL;
-    }
-#endif /* CONFIG_MBEDTLS_HARDWARE_AES */
-
-    BT_DBG("enc_data %s", bt_hex(enc_data, 16));
-
-    return 0;
 }
 
 #if CONFIG_BLE_MESH_USE_DUPLICATE_SCAN

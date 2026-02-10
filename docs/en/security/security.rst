@@ -75,7 +75,7 @@ Please refer to :doc:`flash-encryption` for detailed information about this feat
 Flash Encryption Best Practices
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* It is recommended to use flash Encryption release mode for the production use-cases.
+* It is recommended to use :ref:`flash-enc-release-mode` for the production use-cases.
 * It is recommended to have a unique flash encryption key per device.
 * Enable :ref:`secure_boot-guide` as an extra layer of protection, and to prevent an attacker from selectively corrupting any part of the flash before boot.
 
@@ -157,7 +157,7 @@ Flash Encryption Best Practices
             * - High
               - 72.4 %
 
-        .. [#] The above performance numbers have been calculated using the AES performance test of the mbedtls test application :component_file:`test_aes_perf.c <mbedtls/test_apps/main/test_aes_perf.c>`.
+        .. [#] The above performance numbers have been calculated using the AES performance test of the mbedtls test application :component_file:`test_psa_aes_perf.c <mbedtls/test_apps/main/test_psa_aes_perf.c>`.
 
         Considering the above performance impact, ESP-IDF by-default does not enable the pseudo-round function to avoid any performance-related degrade. But it is recommended to enable the pseudo-round function for better security.
 

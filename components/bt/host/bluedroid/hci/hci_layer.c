@@ -123,7 +123,9 @@ int hci_start_up(void)
     osi_event_bind(hci_host_env.downstream_data_ready, hci_host_thread, HCI_DOWNSTREAM_DATA_QUEUE_IDX);
 
     packet_fragmenter->init(&packet_fragmenter_callbacks);
-    hal->open(&hal_callbacks, hci_host_thread);
+    if (!hal->open(&hal_callbacks, hci_host_thread)) {
+        goto error;
+    }
 
     hci_host_startup_flag = true;
     return 0;
@@ -447,19 +449,35 @@ static bool filter_incoming_event(BT_HDR *packet)
     uint8_t event_code;
     command_opcode_t opcode;
 
+    if (packet == NULL) {
+        return true;
+    }
+
+    if (packet->len < HCI_EVENT_PREAMBLE_SIZE) {
+        HCI_TRACE_WARNING("dropping too short HCI event (len=%u)", packet->len);
+        osi_free(packet);
+        return true;
+    }
     STREAM_TO_UINT8(event_code, stream);
     STREAM_SKIP_UINT8(stream); // Skip the parameter total length field
 
     HCI_TRACE_DEBUG("Receive packet event_code=0x%x\n", event_code);
 
     if (event_code == HCI_COMMAND_COMPLETE_EVT) {
+        if (packet->len < HCI_EVENT_PREAMBLE_SIZE + HCI_CC_EVENT_MIN_PARAM_LEN) {
+            HCI_TRACE_WARNING("dropping too short Command Complete (len=%u)", packet->len);
+            osi_free(packet);
+            return true;
+        }
         STREAM_TO_UINT8(hci_host_env.command_credits, stream);
         STREAM_TO_UINT16(opcode, stream);
         wait_entry = get_waiting_command(opcode);
-        metadata = (hci_cmd_metadata_t *)(wait_entry->data);
         if (!wait_entry) {
             HCI_TRACE_WARNING("%s command complete event with no matching command. opcode: 0x%x.", __func__, opcode);
-        } else if (metadata->command_complete_cb) {
+            goto intercepted;
+        }
+        metadata = (hci_cmd_metadata_t *)(wait_entry->data);
+        if (metadata->command_complete_cb) {
             metadata->command_complete_cb(packet, metadata->context);
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
             BlE_SYNC *sync_info =  btsnd_hcic_ble_get_sync_info();
@@ -479,6 +497,11 @@ static bool filter_incoming_event(BT_HDR *packet)
         goto intercepted;
     } else if (event_code == HCI_COMMAND_STATUS_EVT) {
         uint8_t status;
+        if (packet->len < HCI_EVENT_PREAMBLE_SIZE + HCI_CS_EVENT_MIN_PARAM_LEN) {
+            HCI_TRACE_WARNING("dropping too short Command Status (len=%u)", packet->len);
+            osi_free(packet);
+            return true;
+        }
         STREAM_TO_UINT8(status, stream);
         STREAM_TO_UINT8(hci_host_env.command_credits, stream);
         STREAM_TO_UINT16(opcode, stream);
@@ -486,10 +509,12 @@ static bool filter_incoming_event(BT_HDR *packet)
         // If a command generates a command status event, it won't be getting a command complete event
 
         wait_entry = get_waiting_command(opcode);
-        metadata = (hci_cmd_metadata_t *)(wait_entry->data);
         if (!wait_entry) {
             HCI_TRACE_WARNING("%s command status event with no matching command. opcode: 0x%x", __func__, opcode);
-        } else if (metadata->command_status_cb) {
+            goto intercepted;
+        }
+        metadata = (hci_cmd_metadata_t *)(wait_entry->data);
+        if (metadata->command_status_cb) {
             metadata->command_status_cb(status, &metadata->command, metadata->context);
         }
 

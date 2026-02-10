@@ -1,7 +1,7 @@
 /**
  * SPDX-FileCopyrightText: 2025 Espressif Systems (Shanghai) CO LTD
  *
- *  SPDX-License-Identifier: Apache-2.0
+ *  SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 #pragma once
 
@@ -1169,6 +1169,7 @@ typedef struct {
     volatile cnnt_io_mux_date_reg_t date;
 } cnnt_io_mux_dev_t;
 
+extern cnnt_io_mux_dev_t CNNT_PAD_CTRL;
 
 #ifndef __cplusplus
 _Static_assert(sizeof(cnnt_io_mux_dev_t) == 0x400, "Invalid size of cnnt_io_mux_dev_t structure");

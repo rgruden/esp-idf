@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2018-2024 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2018-2025 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,6 +23,7 @@ typedef struct httpd_ssl_transport_ctx {
     httpd_ssl_ctx_t *global_ctx;
 } httpd_ssl_transport_ctx_t;
 
+#ifdef CONFIG_ESP_HTTPS_SERVER_EVENTS
 ESP_EVENT_DEFINE_BASE(ESP_HTTPS_SERVER_EVENT);
 
 #if CONFIG_ESP_HTTPS_SERVER_EVENT_POST_TIMEOUT == -1
@@ -31,7 +32,6 @@ ESP_EVENT_DEFINE_BASE(ESP_HTTPS_SERVER_EVENT);
 #define ESP_HTTPS_SERVER_EVENT_POST_TIMEOUT pdMS_TO_TICKS(CONFIG_ESP_HTTPS_SERVER_EVENT_POST_TIMEOUT)
 #endif
 
-
 static void http_dispatch_event_to_event_loop(int32_t event_id, const void* event_data, size_t event_data_size)
 {
     esp_err_t err = esp_event_post(ESP_HTTPS_SERVER_EVENT, event_id, event_data, event_data_size, ESP_HTTPS_SERVER_EVENT_POST_TIMEOUT);
@@ -39,6 +39,15 @@ static void http_dispatch_event_to_event_loop(int32_t event_id, const void* even
         ESP_LOGE(TAG, "Failed to post http_client event: %"PRId32", error: %s", event_id, esp_err_to_name(err));
     }
 }
+#else // CONFIG_ESP_HTTPS_SERVER_EVENTS
+static void http_dispatch_event_to_event_loop(int32_t event_id, const void* event_data, size_t event_data_size)
+{
+    // Events disabled, do nothing
+    (void) event_id;
+    (void) event_data;
+    (void) event_data_size;
+}
+#endif // CONFIG_ESP_HTTPS_SERVER_EVENTS
 
 /**
  * SSL socket close handler
@@ -224,6 +233,13 @@ fail:
             esp_https_server_last_error_t last_error = {0};
             last_error.last_error = esp_tls_get_and_clear_last_error(error_handle, &last_error.esp_tls_error_code, &last_error.esp_tls_flags);
             http_dispatch_event_to_event_loop(HTTPS_SERVER_EVENT_ERROR, &last_error, sizeof(last_error));
+        }
+        // Call user callback if configured, allowing user to log failures
+        if (global_ctx->user_cb) {
+            esp_https_server_user_cb_arg_t user_cb_data = {0};
+            user_cb_data.user_cb_state = HTTPD_SSL_USER_CB_SESS_ERROR;
+            user_cb_data.tls = tls;
+            (global_ctx->user_cb)((void *)&user_cb_data);
         }
         esp_tls_server_session_delete(tls);
     }

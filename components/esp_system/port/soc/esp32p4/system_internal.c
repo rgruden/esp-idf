@@ -18,7 +18,6 @@
 #include "esp_cpu.h"
 #include "soc/rtc.h"
 #include "esp_private/rtc_clk.h"
-#include "soc/rtc_periph.h"
 #include "soc/uart_reg.h"
 #include "hal/wdt_hal.h"
 #include "esp_private/cache_err_int.h"
@@ -33,6 +32,7 @@
 #include "hal/axi_dma_ll.h"
 #include "hal/dw_gdma_ll.h"
 #include "hal/dma2d_ll.h"
+#include "hal/efuse_hal.h"
 
 void esp_system_reset_modules_on_exit(void)
 {
@@ -124,19 +124,21 @@ void esp_system_reset_modules_on_exit(void)
     CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_RSA);
     CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_SHA);
 
-#if CONFIG_ESP32P4_REV_MIN_FULL <= 100
-    // enable soc clk and reset parent crypto
-    SET_PERI_REG_MASK(HP_SYS_CLKRST_SOC_CLK_CTRL1_REG, HP_SYS_CLKRST_REG_CRYPTO_SYS_CLK_EN);
-    SET_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_CRYPTO);
-    CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_CRYPTO);
+#if CONFIG_ESP32P4_REV_MIN_FULL < 101
+    if (efuse_hal_chip_revision() < 101) {
+        // enable soc clk and reset parent crypto
+        SET_PERI_REG_MASK(HP_SYS_CLKRST_SOC_CLK_CTRL1_REG, HP_SYS_CLKRST_REG_CRYPTO_SYS_CLK_EN);
+        SET_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_CRYPTO);
+        CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_CRYPTO);
 
-    // enable soc clk for key manager
-    SET_PERI_REG_MASK(HP_SYS_CLKRST_SOC_CLK_CTRL1_REG, HP_SYS_CLKRST_REG_KEY_MANAGER_SYS_CLK_EN);
+        // enable soc clk for key manager
+        SET_PERI_REG_MASK(HP_SYS_CLKRST_SOC_CLK_CTRL1_REG, HP_SYS_CLKRST_REG_KEY_MANAGER_SYS_CLK_EN);
 
-    // enable key manager peripheral clock and reset
-    SET_PERI_REG_MASK(HP_SYS_CLKRST_PERI_CLK_CTRL25_REG, HP_SYS_CLKRST_REG_CRYPTO_KM_CLK_EN);
-    SET_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_KM);
-    CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_KM);
+        // enable key manager peripheral clock and reset
+        SET_PERI_REG_MASK(HP_SYS_CLKRST_PERI_CLK_CTRL25_REG, HP_SYS_CLKRST_REG_CRYPTO_KM_CLK_EN);
+        SET_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_KM);
+        CLEAR_PERI_REG_MASK(HP_SYS_CLKRST_HP_RST_EN2_REG, HP_SYS_CLKRST_REG_RST_EN_KM);
+    }
 #endif
 
 #if CONFIG_ESP32P4_REV_MIN_FULL == 0
@@ -203,7 +205,6 @@ void esp_restart_noos(void)
 #endif
 
 #if CONFIG_SPIRAM_INSTRUCTIONS_RODATA
-    //TODO: IDF-7556
     // disable remap if enabled in menuconfig
     REG_CLR_BIT(HP_SYS_HP_PSRAM_FLASH_ADDR_INTERCHANGE_REG, HP_SYS_HP_PSRAM_FLASH_ADDR_INTERCHANGE_DMA | HP_SYS_HP_PSRAM_FLASH_ADDR_INTERCHANGE_CPU);
 #endif

@@ -13,7 +13,6 @@
 
 /* interim to enable test_wl_host and test_fatfs_on_host compilation (both use IDF_TARGET_ESP32)
  * should go back to #include "sys/queue.h" once the tests are switched to CMake
- * see IDF-7000
  */
 #if __has_include(<bsd/sys/queue.h>)
 #include <bsd/sys/queue.h>
@@ -478,7 +477,12 @@ esp_err_t esp_partition_register_external(esp_flash_t *flash_chip, size_t offset
     if (flash_chip == NULL) {
         flash_chip = esp_flash_default_chip;
     }
-    if (offset + size > flash_chip->size) {
+    uint32_t flash_size = 0;
+    esp_err_t ret = esp_flash_get_size(flash_chip, &flash_size);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    if (offset + size > flash_size) {
         return ESP_ERR_INVALID_SIZE;
     }
 #endif // CONFIG_IDF_TARGET_LINUX

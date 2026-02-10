@@ -89,10 +89,6 @@ esp_err_t esp_ota_begin(const esp_partition_t* partition, size_t image_size, esp
  * Unlike esp_ota_begin(), this function does not erase the partition which receives the OTA update, but rather expects that part of the image
  * has already been written correctly, and it resumes writing from the given offset.
  *
- * @note When flash encryption is enabled, data writes must be 16-byte aligned.
- *       Any leftover (non-aligned) data is temporarily cached and may be lost after reboot.
- *       Therefore, during resumption, ensure that image offset is always 16-byte aligned.
- *
  * @param partition Pointer to info for the partition which is receiving the OTA update. Required.
  * @param erase_size Specifies how much flash memory to erase before resuming OTA, depending on whether a sequential write or a bulk erase is being used.
  * @param image_offset Offset from where to resume the OTA process. Should be set to the number of bytes already written.
@@ -213,6 +209,8 @@ esp_err_t esp_ota_abort(esp_ota_handle_t handle);
 /**
  * @brief Configure OTA data for a new boot partition
  *
+ * Equivalent to esp_image_verify() followed by esp_ota_set_boot_partition_skip_validate().
+ *
  * @note If this function returns ESP_OK, calling esp_restart() will boot the newly configured app partition.
  *
  * @param partition Pointer to info for partition containing app image to boot.
@@ -225,6 +223,21 @@ esp_err_t esp_ota_abort(esp_ota_handle_t handle);
  *    - ESP_ERR_FLASH_OP_TIMEOUT or ESP_ERR_FLASH_OP_FAIL: Flash erase or write failed.
  */
 esp_err_t esp_ota_set_boot_partition(const esp_partition_t* partition);
+
+/**
+ * @brief Configure OTA data for a new boot partition without validating the image
+ *
+ * @note If this function returns ESP_OK, calling esp_restart() will boot the newly configured app partition.
+ *
+ * @param partition Pointer to info for partition containing app image to boot.
+ *
+ * @return
+ *    - ESP_OK: OTA data updated, next reboot will use specified partition.
+ *    - ESP_ERR_INVALID_ARG: partition argument was NULL or didn't point to a valid OTA partition of type "app".
+ *    - ESP_ERR_NOT_FOUND: OTA data partition not found.
+ *    - ESP_ERR_FLASH_OP_TIMEOUT or ESP_ERR_FLASH_OP_FAIL: Flash erase or write failed.
+ */
+esp_err_t esp_ota_set_boot_partition_skip_validate(const esp_partition_t* partition);
 
 /**
  * @brief Get partition info of currently configured boot app
@@ -366,7 +379,7 @@ esp_err_t esp_ota_mark_app_invalid_rollback_and_reboot(void);
 /**
  * @brief Returns last partition with invalid state (ESP_OTA_IMG_INVALID or ESP_OTA_IMG_ABORTED).
  *
- * @return partition.
+ * @return Pointer to the last invalid partition, or NULL if no invalid partition is recorded.
  */
 const esp_partition_t* esp_ota_get_last_invalid_partition(void);
 

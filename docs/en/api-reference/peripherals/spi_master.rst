@@ -353,6 +353,14 @@ Driver Usage
 
 The example code for the SPI Master driver can be found in the :example:`peripherals/spi_master` directory of ESP-IDF examples.
 
+.. only:: SOC_PSRAM_DMA_CAPABLE
+
+    Transactions with Data on PSRAM
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    {IDF_TARGET_NAME} supports GPSPI Master with DMA transferring data from/to PSRAM directly without extra internal copy process, which saves memory, by adding :c:macro:`SPI_TRANS_DMA_USE_PSRAM` flag to the transaction.
+
+    Note that this feature shares bandwidth (bus frequency * bus bits width) with MSPI bus, so GPSPI transfer bandwidth should be less than PSRAM bandwidth, **otherwise transmission data may be lost**. You can check the return value or :c:macro:`SPI_TRANS_DMA_RX_FAIL` and :c:macro:`SPI_TRANS_DMA_TX_FAIL` flags after the transaction is finished to check if error occurs during the transmission. If the transaction returns :c:macro:`ESP_ERR_INVALID_STATE` error, the transaction fails.
 
 Transactions with Data Not Exceeding 32 Bits
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -366,6 +374,25 @@ Transactions with Integers Other than ``uint8_t``
 An SPI Host reads and writes data into memory byte by byte. By default, data is sent with the most significant bit (MSB) first, as LSB is first used in rare cases. If a value of fewer than 8 bits needs to be sent, the bits should be written into memory in the MSB first manner.
 
 For example, if ``0b00010`` needs to be sent, it should be written into a ``uint8_t`` variable, and the length for reading should be set to 5 bits. The Device will still receive 8 bits with 3 additional "random" bits, so the reading must be performed correctly.
+
+Not all chips support data transmission with any bit lengths. Sending or receiving unsupported bit lengths will return :c:macro:`ESP_ERR_NOT_SUPPORTED` error. The supported lengths are shown in the table below (**YES** means support any bits length, **NO** means bytes (8 bits) only):
+
++------+--------+-------+----------+--------------------+---------------------+
+|               | ESP32 | ESP32-S2 | ESP32-S3/C2/C3/C6  | ESP32-H2/P4/C5/C61  |
++======+========+=======+==========+====================+=====================+
+| TX   | DMA    | YES   | YES      | (bit_len % 8) != 1 | YES                 |
++      +--------+-------+----------+--------------------+---------------------+
+|      | NO DMA | YES   | YES      | (bit_len % 8) != 1 | YES                 |
++------+--------+-------+----------+--------------------+---------------------+
+| RX   | DMA    | NO    | NO       | YES                | YES                 |
++      +--------+-------+----------+--------------------+---------------------+
+|      | NO DMA | YES   | NO       | YES                | YES                 |
++------+--------+-------+----------+--------------------+---------------------+
+
+If you still need to use unsupported bit lengths, you can use the following alternatives:
+
+1. Use :cpp:member:`spi_transaction_t::cmd` and :cpp:member:`spi_transaction_t::addr` and data phase combination. The drawback is that the command and address phases do not receive data from the slave device.
+2. Use two supported length transmissions combination, like ``2+7`` to implement ``9 bit`` transmission, while keeping the CS line valid. The drawback is that there is a minimum time interval between two transmissions (see :ref:`transaction_time_cost`), and the overall transfer rate is lower.
 
 On top of that, {IDF_TARGET_NAME} is a little-endian chip, which means that the least significant byte of ``uint16_t`` and ``uint32_t`` variables is stored at the smallest address. Hence, if ``uint16_t`` is stored in memory, bits [7:0] are sent first, followed by bits [15:8].
 
@@ -490,7 +517,7 @@ GPIO Matrix and IO_MUX
 
     Most of the chip's peripheral signals have a direct connection to their dedicated IO_MUX pins. However, the signals can also be routed to any other available pins using the less direct GPIO matrix. If at least one signal is routed through the GPIO matrix, then all signals will be routed through it.
 
-    When an SPI Host is set to 80 MHz or lower frequencies, routing SPI pins via the GPIO matrix will behave the same compared to routing them via IOMUX.
+    When an SPI Host is set to 40 MHz or lower frequencies, routing SPI pins via the GPIO matrix will behave the same compared to routing them via IOMUX.
 
     The IO_MUX pins for SPI buses are given below.
 
@@ -528,6 +555,7 @@ There are three factors limiting the transfer speed:
 
 The main parameter that determines the transfer speed for large transactions is clock frequency. For multiple small transactions, the transfer speed is mostly determined by the length of transaction intervals.
 
+.. _transaction_time_cost:
 
 Transaction Duration
 ^^^^^^^^^^^^^^^^^^^^

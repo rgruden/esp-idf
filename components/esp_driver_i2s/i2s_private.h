@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,7 +13,6 @@
 #include "freertos/queue.h"
 #include "soc/lldesc.h"
 #include "soc/soc_caps.h"
-#include "soc/soc_caps_full.h"
 #include "hal/i2s_periph.h"
 #include "hal/i2s_hal.h"
 #include "hal/lp_i2s_hal.h"
@@ -50,18 +49,6 @@ extern "C" {
 #define I2S_MEM_ALLOC_CAPS      MALLOC_CAP_DEFAULT
 #endif //CONFIG_I2S_ISR_IRAM_SAFE
 #define I2S_DMA_ALLOC_CAPS      (MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
-
-#if SOC_PERIPH_CLK_CTRL_SHARED
-#define I2S_CLOCK_SRC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define I2S_CLOCK_SRC_ATOMIC()
-#endif
-
-#if !SOC_RCC_IS_INDEPENDENT
-#define I2S_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
-#else
-#define I2S_RCC_ATOMIC()
-#endif
 
 #define I2S_USE_RETENTION_LINK  (SOC_HAS(PAU) && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP)
 
@@ -162,6 +149,7 @@ struct i2s_channel_obj_t {
     int                     intr_prio_flags;/*!< i2s interrupt priority flags */
     void                    *mode_info;     /*!< Slot, clock and gpio information of each mode */
     struct {
+        bool                is_port_auto: 1;   /*!< Whether the port is auto-assigned */
         bool                is_etm_start: 1;   /*!< Whether start by etm tasks */
         bool                is_etm_stop: 1;    /*!< Whether stop by etm tasks */
         bool                is_raw_pdm: 1;     /*!< Flag of whether send/receive PDM in raw data, i.e., no PCM2PDM/PDM2PCM filter enabled */
@@ -177,6 +165,7 @@ struct i2s_channel_obj_t {
     uint32_t                sclk_hz;        /*!< Source clock frequency */
     uint32_t                origin_mclk_hz; /*!< Original mclk frequency */
     uint32_t                curr_mclk_hz;   /*!< Current mclk frequency */
+    uint32_t                bclk_hz;        /*!< BCLK frequency */
     /* Locks and queues */
     SemaphoreHandle_t       mutex;          /*!< Mutex semaphore for the channel operations */
     SemaphoreHandle_t       binary;         /*!< Binary semaphore for writing / reading / enabling / disabling */
@@ -341,6 +330,19 @@ void i2s_output_gpio_reserve(i2s_chan_handle_t handle, int gpio_num);
  * @param gpio_mask The output gpio mask to be revoked
  */
 void i2s_output_gpio_revoke(i2s_chan_handle_t handle, uint64_t gpio_mask);
+
+#if SOC_I2S_HW_VERSION_1
+/**
+ * @brief Change the port of the I2S channel
+ *
+ * @param handle        I2S channel handle
+ * @param id            I2S port id
+ * @return
+ *      - ESP_OK                Change port success
+ *      - ESP_ERR_NOT_FOUND     No available I2S port found
+ */
+esp_err_t i2s_channel_change_port(i2s_chan_handle_t handle, int id);
+#endif
 
 #ifdef __cplusplus
 }

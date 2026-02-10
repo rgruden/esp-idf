@@ -9,7 +9,7 @@ The ``idf.py`` command-line tool provides a front-end for easily managing your p
 - Ninja_, which builds the project.
 - `esptool`_, which flashes the target.
 
-The :ref:`Step 5. First Steps on ESP-IDF <get-started-configure>` contains a brief introduction on how to set up ``idf.py`` to configure, build, and flash projects.
+:ref:`Configure Your Project for Windows, <get-started-configure>` :ref:`Linux, or macOS <get-started-configure-linux-macos>` contains a brief introduction on how to set up ``idf.py`` to configure, build, and flash projects.
 
 .. important::
 
@@ -176,7 +176,7 @@ For commands that are not known to ``idf.py``, an attempt to execute them as a b
 
 The command ``idf.py`` supports `shell autocompletion <https://click.palletsprojects.com/shell-completion/>`_ for bash, zsh and fish shells.
 
-To enable autocompletion for ``idf.py``, use the ``export`` command (:ref:`Step 4. Set up the environment variables <get-started-set-up-env>`). Autocompletion is initiated by pressing the TAB key. Type ``idf.py -`` and press the TAB key to autocomplete options.
+To enable autocompletion for ``idf.py``, use the ``export`` command (:ref:`setting up the environment for Windows <get-started-set-up-env>`, :ref:`Linux or macOS <get-started-set-up-env-linux-macos>`). Autocompletion is initiated by pressing the TAB key. Type ``idf.py -`` and press the TAB key to autocomplete options.
 
 The autocomplete support for PowerShell is planned in the future.
 
@@ -401,11 +401,11 @@ For example, let's have a file `custom_flash.txt`:
 
   flash --baud 115200
 
-Then the command can be executed as: ``idf.py @custom_flash.txt monitor``
+Then the command can be executed as: ``idf.py "@custom_flash.txt" monitor``
 
-Arguments from a file can be combined with additional command line arguments, and multiple files annotated with ``@`` can be used simultaneously. For instance, if there is a second file ``another_config.txt``, both can be utilized by specifying ``idf.py @custom_flash.txt @another_config.txt monitor``.
+Arguments from a file can be combined with additional command line arguments, and multiple files annotated with ``@`` can be used simultaneously. For instance, if there is a second file ``another_config.txt``, both can be utilized by specifying ``idf.py "@custom_flash.txt" "@another_config.txt" monitor``.
 
-A further example of how this argument file can be used, e.g., creating configuration profile files via @filename, is in the :example_file:`Multiple Build Configurations Example <build_system/cmake/multi_config/README.md>`.
+A further example of how this argument file can be used, e.g., creating configuration profile files via @filename, is in the `Create configuration profile files <profile_file_>`_ paragraph in Multiple Build Configurations Example.
 
 Extending ``idf.py``
 ====================
@@ -517,3 +517,4 @@ Basic Usage Examples
 .. _CCache: https://ccache.dev/
 .. _click context: https://click.palletsprojects.com/en/stable/api/#context
 .. _CMake presets: https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html
+.. _profile_file: https://github.com/espressif/esp-idf/tree/release/v5.5/examples/build_system/cmake/multi_config#create-configuration-profile-files-via-filename

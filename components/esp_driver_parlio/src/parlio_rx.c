@@ -263,7 +263,7 @@ static esp_err_t parlio_rx_unit_set_gpio(parlio_rx_unit_handle_t rx_unit, const 
         /* Connect the clock in signal to the GPIO matrix if it is set */
         gpio_input_enable(config->clk_in_gpio_num);
         esp_rom_gpio_connect_in_signal(config->clk_in_gpio_num,
-                                       parlio_periph_signals.groups[group_id].rx_units[unit_id].clk_in_sig, false);
+                                       soc_parlio_signals[group_id].rx_units[unit_id].clk_in_sig, false);
     }
     /* When the source clock comes from internal and supported to output the internal clock,
      * enable the gpio output direction and connect to the clock output signal */
@@ -272,7 +272,7 @@ static esp_err_t parlio_rx_unit_set_gpio(parlio_rx_unit_handle_t rx_unit, const 
         gpio_func_sel(config->clk_out_gpio_num, PIN_FUNC_GPIO);
         // connect the signal to the GPIO by matrix, it will also enable the output path properly
         esp_rom_gpio_connect_out_signal(config->clk_out_gpio_num,
-                                        parlio_periph_signals.groups[group_id].rx_units[unit_id].clk_out_sig, false, false);
+                                        soc_parlio_signals[group_id].rx_units[unit_id].clk_out_sig, false, false);
 #else
         ESP_RETURN_ON_FALSE(false, ESP_ERR_NOT_SUPPORTED, TAG, "this target not support to output the clock");
 #endif // PARLIO_LL_SUPPORT(RX_CLK_OUTPUT)
@@ -290,7 +290,7 @@ static esp_err_t parlio_rx_unit_set_gpio(parlio_rx_unit_handle_t rx_unit, const 
         if (config->data_gpio_nums[i] >= 0) {
             gpio_input_enable(config->data_gpio_nums[i]);
             esp_rom_gpio_connect_in_signal(config->data_gpio_nums[i],
-                                           parlio_periph_signals.groups[group_id].rx_units[unit_id].data_sigs[i], false);
+                                           soc_parlio_signals[group_id].rx_units[unit_id].data_sigs[i], false);
         } else {
             ESP_LOGW(TAG, "data line %d not assigned", i);
         }
@@ -332,7 +332,7 @@ static bool parlio_rx_default_eof_callback(gdma_channel_handle_t dma_chan, gdma_
         /* The current transaction finished, try to get the next transaction from the transaction queue */
         if (xQueueReceiveFromISR(rx_unit->trans_que, &next_trans, &high_task_woken) == pdTRUE) {
             if (rx_unit->cfg.flags.free_clk) {
-                PARLIO_CLOCK_SRC_ATOMIC() {
+                PERIPH_RCC_ATOMIC() {
                     parlio_ll_rx_enable_clock(rx_unit->base.group->hal.regs, false);
                 }
             }
@@ -345,7 +345,7 @@ static bool parlio_rx_default_eof_callback(gdma_channel_handle_t dma_chan, gdma_
             gdma_start(rx_unit->dma_chan, gdma_link_get_head_addr(rx_unit->dma_link));
             if (rx_unit->cfg.flags.free_clk) {
                 parlio_ll_rx_start(rx_unit->base.group->hal.regs, true);
-                PARLIO_CLOCK_SRC_ATOMIC() {
+                PERIPH_RCC_ATOMIC() {
                     parlio_ll_rx_enable_clock(rx_unit->base.group->hal.regs, true);
                 }
             }
@@ -444,12 +444,11 @@ static esp_err_t parlio_rx_unit_init_dma(parlio_rx_unit_handle_t rx_unit, size_t
 {
     /* Allocate and connect the GDMA channel */
     gdma_channel_alloc_config_t dma_chan_config = {
-        .direction = GDMA_CHANNEL_DIRECTION_RX,
 #if CONFIG_PARLIO_RX_ISR_CACHE_SAFE
         .flags.isr_cache_safe = true,
 #endif
     };
-    ESP_RETURN_ON_ERROR(PARLIO_GDMA_NEW_CHANNEL(&dma_chan_config, &rx_unit->dma_chan), TAG, "allocate RX DMA channel failed");
+    ESP_RETURN_ON_ERROR(PARLIO_GDMA_NEW_CHANNEL(&dma_chan_config, NULL, &rx_unit->dma_chan), TAG, "allocate RX DMA channel failed");
     gdma_connect(rx_unit->dma_chan, GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_PARLIO, 0));
 
     /* Set GDMA strategy */
@@ -460,7 +459,7 @@ static esp_err_t parlio_rx_unit_init_dma(parlio_rx_unit_handle_t rx_unit, size_t
     gdma_apply_strategy(rx_unit->dma_chan, &gdma_strategy_conf);
 
     // configure DMA transfer parameters
-    rx_unit->dma_burst_size = dma_burst_size ? dma_burst_size : 16;
+    rx_unit->dma_burst_size = dma_burst_size ? dma_burst_size : 32;
     gdma_transfer_config_t trans_cfg = {
         .max_data_burst_size = rx_unit->dma_burst_size, // Enable DMA burst transfer for better performance,
         .access_ext_mem = true,
@@ -528,13 +527,13 @@ static esp_err_t parlio_select_periph_clock(parlio_rx_unit_handle_t rx_unit, con
         // use CPU_MAX lock to ensure PSRAM bandwidth and usability during DFS
         lock_type = ESP_PM_CPU_FREQ_MAX;
 #endif
-        esp_err_t ret  = esp_pm_lock_create(lock_type, 0, parlio_periph_signals.groups[rx_unit->base.group->group_id].module_name, &rx_unit->pm_lock);
+        esp_err_t ret  = esp_pm_lock_create(lock_type, 0, soc_parlio_signals[rx_unit->base.group->group_id].module_name, &rx_unit->pm_lock);
         ESP_RETURN_ON_ERROR(ret, TAG, "create pm lock failed");
     }
 #endif
 
     /* Set clock configuration */
-    PARLIO_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_set_clock_source(hal->regs, clk_src);
         parlio_ll_rx_set_clock_div(hal->regs, &clk_div);
     }
@@ -660,11 +659,11 @@ esp_err_t parlio_new_rx_unit(const parlio_rx_unit_config_t *config, parlio_rx_un
     }
 
     /* Reset RX module */
-    PARLIO_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_reset_clock(hal->regs);
     }
     parlio_ll_rx_reset_fifo(hal->regs);
-    PARLIO_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_enable_clock(hal->regs, false);
     }
     parlio_ll_rx_start(hal->regs, false);
@@ -733,7 +732,7 @@ esp_err_t parlio_rx_unit_enable(parlio_rx_unit_handle_t rx_unit, bool reset_queu
     if (!rx_unit->cfg.flags.free_clk) {
         parlio_ll_rx_reset_fifo(hal->regs);
         parlio_ll_rx_start(hal->regs, true);
-        PARLIO_CLOCK_SRC_ATOMIC() {
+        PERIPH_RCC_ATOMIC() {
             parlio_ll_rx_enable_clock(hal->regs, true);
         }
     }
@@ -756,7 +755,7 @@ esp_err_t parlio_rx_unit_enable(parlio_rx_unit_handle_t rx_unit, bool reset_queu
             trans.aligned_payload.buf.body.recovery_address = rx_unit->dma_buf;
         }
         if (rx_unit->cfg.flags.free_clk) {
-            PARLIO_CLOCK_SRC_ATOMIC() {
+            PERIPH_RCC_ATOMIC() {
                 parlio_ll_rx_enable_clock(hal->regs, false);
             }
         }
@@ -766,7 +765,7 @@ esp_err_t parlio_rx_unit_enable(parlio_rx_unit_handle_t rx_unit, bool reset_queu
         gdma_start(rx_unit->dma_chan, gdma_link_get_head_addr(rx_unit->dma_link));
         if (rx_unit->cfg.flags.free_clk) {
             parlio_ll_rx_start(hal->regs, true);
-            PARLIO_CLOCK_SRC_ATOMIC() {
+            PERIPH_RCC_ATOMIC() {
                 parlio_ll_rx_enable_clock(hal->regs, true);
             }
         }
@@ -789,7 +788,7 @@ esp_err_t parlio_rx_unit_disable(parlio_rx_unit_handle_t rx_unit)
     rx_unit->is_enabled = false;
     /* stop the RX engine */
     gdma_stop(rx_unit->dma_chan);
-    PARLIO_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_enable_clock(hal->regs, false);
     }
     parlio_ll_rx_start(hal->regs, false);
@@ -944,7 +943,7 @@ static esp_err_t parlio_rx_unit_do_transaction(parlio_rx_unit_handle_t rx_unit, 
     portEXIT_CRITICAL_ISR(&s_rx_spinlock);
     if (is_stopped) {
         if (rx_unit->cfg.flags.free_clk) {
-            PARLIO_CLOCK_SRC_ATOMIC() {
+            PERIPH_RCC_ATOMIC() {
                 parlio_ll_rx_enable_clock(rx_unit->base.group->hal.regs, false);
             }
         }
@@ -957,7 +956,7 @@ static esp_err_t parlio_rx_unit_do_transaction(parlio_rx_unit_handle_t rx_unit, 
         gdma_start(rx_unit->dma_chan, gdma_link_get_head_addr(rx_unit->dma_link));
         if (rx_unit->cfg.flags.free_clk) {
             parlio_ll_rx_start(rx_unit->base.group->hal.regs, true);
-            PARLIO_CLOCK_SRC_ATOMIC() {
+            PERIPH_RCC_ATOMIC() {
                 parlio_ll_rx_enable_clock(rx_unit->base.group->hal.regs, true);
             }
         }
@@ -993,7 +992,7 @@ esp_err_t parlio_rx_unit_receive(parlio_rx_unit_handle_t rx_unit,
         ESP_RETURN_ON_FALSE(recv_cfg->delimiter->valid_sig_line_id >= rx_unit->cfg.data_width,
                             ESP_ERR_INVALID_ARG, TAG, "the valid_sig_line_id of this delimiter is conflict with rx unit data width");
         /* Assign the signal here to ensure iram safe */
-        recv_cfg->delimiter->valid_sig = parlio_periph_signals.groups[rx_unit->base.group->group_id].
+        recv_cfg->delimiter->valid_sig = soc_parlio_signals[rx_unit->base.group->group_id].
                                          rx_units[rx_unit->base.unit_id].
                                          data_sigs[recv_cfg->delimiter->valid_sig_line_id];
     }
@@ -1058,7 +1057,7 @@ esp_err_t parlio_rx_unit_receive_from_isr(parlio_rx_unit_handle_t rx_unit,
          * Specifically, level or pulse delimiter requires one data line as valid signal, so these two delimiters can't support PARLIO_RX_UNIT_MAX_DATA_WIDTH */
         PARLIO_RX_CHECK_ISR(recv_cfg->delimiter->valid_sig_line_id >= rx_unit->cfg.data_width, ESP_ERR_INVALID_ARG);
         /* Assign the signal here to ensure iram safe */
-        recv_cfg->delimiter->valid_sig = parlio_periph_signals.groups[rx_unit->base.group->group_id].
+        recv_cfg->delimiter->valid_sig = soc_parlio_signals[rx_unit->base.group->group_id].
                                          rx_units[rx_unit->base.unit_id].
                                          data_sigs[recv_cfg->delimiter->valid_sig_line_id];
     }
@@ -1159,18 +1158,18 @@ esp_err_t parlio_rx_unit_trigger_fake_eof(parlio_rx_unit_handle_t rx_unit, bool 
     /* Save the current register values */
     parl_io_dev_t save_curr_regs = *(parl_io_dev_t *)hal->regs;
     /* Reset the hardware FSM of the parlio module */
-    PARLIO_RCC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_reset_register(rx_unit->base.group->group_id);
     }
     /* Switch to the default clock source to ensure the register values can be written back successfully */
-    PARLIO_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_set_clock_source(hal->regs, PARLIO_CLK_SRC_DEFAULT);
     }
     portEXIT_CRITICAL_SAFE(&s_rx_spinlock);
     /* Restore the register values and clock source*/
     memcpy(hal->regs, &save_curr_regs, sizeof(parl_io_dev_t));
     parlio_ll_rx_update_config(hal->regs);
-    PARLIO_CLOCK_SRC_ATOMIC() {
+    PERIPH_RCC_ATOMIC() {
         parlio_ll_rx_set_clock_source(hal->regs, rx_unit->clk_src);
     }
 

@@ -8,6 +8,7 @@
 
 #define ESP_ROM_HAS_CRC_LE                  (1) // ROM CRC library supports Little Endian
 #define ESP_ROM_HAS_CRC_BE                  (1) // ROM CRC library supports Big Endian
+#define ESP_ROM_HAS_JPEG_DECODE             (1) // ROM has JPEG decode library
 #define ESP_ROM_UART_CLK_IS_XTAL            (1) // UART clock source is selected to XTAL in ROM
 #define ESP_ROM_USB_SERIAL_DEVICE_NUM       (5) // The serial port ID (UART, USB, ...) of USB_SERIAL_JTAG in the ROM.
 #define ESP_ROM_USB_OTG_NUM                 (4) // The serial port ID (UART, USB, ...) of USB_OTG_CDC in the ROM.
@@ -23,3 +24,4 @@
 #define ESP_ROM_HAS_NEWLIB                  (1) // ROM has newlib (at least parts of it) functions included
 #define ESP_ROM_HAS_NEWLIB_NANO_FORMAT      (1) // ROM has the newlib nano version of formatting functions
 #define ESP_ROM_HAS_VERSION                 (1) // ROM has version/eco information
+#define ESP_ROM_MULTI_HEAP_WALK_PATCH       (1) // ROM does not contain the patch of multi_heap_walk()

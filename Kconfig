@@ -148,8 +148,6 @@ mainmenu "Espressif IoT Development Framework Configuration"
         bool
         default "y" if IDF_TARGET="esp32h4"
         select IDF_TARGET_ARCH_RISCV
-        select IDF_ENV_BRINGUP
-        select IDF_ENV_FPGA if ESP32H4_SELECTS_REV_MP
 
     config IDF_TARGET_ESP32S31
         bool
@@ -161,6 +159,7 @@ mainmenu "Espressif IoT Development Framework Configuration"
     config IDF_TARGET_LINUX
         bool
         default "y" if IDF_TARGET="linux"
+        select FREERTOS_UNICORE
 
     config IDF_FIRMWARE_CHIP_ID
         hex
@@ -396,8 +395,6 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 to code examples under the SOC_CPU_ZCMP_WORKAROUND macro, or disable
                 the ZCMP extension for source files that contain functions which may
                 execute while mstatus.mie = 0.
-
-                Even with these workarounds, the issue may still affect dual-core variants.
 
         choice COMPILER_OPTIMIZATION_ASSERTION_LEVEL
             prompt "Assertion level"
@@ -794,8 +791,5 @@ mainmenu "Espressif IoT Development Framework Configuration"
             - CONFIG_ESP_WIFI_EAP_TLS1_3
             - CONFIG_ESP_WIFI_ENABLE_ROAMING_APP
             - CONFIG_USB_HOST_EXT_PORT_RESET_ATTEMPTS
-            - CONFIG_LIBC_PICOLIBC
             - CONFIG_GDMA_ENABLE_WEIGHTED_ARBITRATION
-            - CONFIG_I3C_MASTER_ENABLED
-            - CONFIG_MBEDTLS_ESP_IDF_USE_PSA_CRYPTO
             - CONFIG_ESPTOOLPY_FAST_REFLASHING

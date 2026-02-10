@@ -31,6 +31,12 @@ Bluedroid
 
             - Sending indicator reports to the HFP client API has been replaced by ``esp_hf_ag_ciev_report(...)``.
 
+     - :component_file:`/bt/host/bluedroid/api/include/api/esp_gap_bt_api.h`
+
+        - Remove ``ESP_BT_GAP_RSSI_HIGH_THRLD`` and ``ESP_BT_GAP_RSSI_LOW_THRLD``
+
+            - Macros of low and high RSSI threshold have been removed.
+
     The following Bluedroid API have been changed:
 
     - :component_file:`/bt/host/bluedroid/api/include/api/esp_sdp_api.h`
@@ -42,3 +48,5 @@ Bluedroid
         - Field ``ESP_A2D_MEDIA_CTRL_STOP`` is removed in structure ``esp_a2d_media_ctrl_t``, and is replaced by ``ESP_A2D_MEDIA_CTRL_SUSPEND``.
 
         - Field ``sbc, m12, m24 and atrac`` is removed and replaced by ``sbc_info, m12_info, m24_info and atrc_info`` in structure ``esp_a2d_mcc_t``.
+
+        - Macro ``ESP_A2D_SBC_CIE_ALLOC_MTHD_SRN`` is renamed to ``ESP_A2D_SBC_CIE_ALLOC_MTHD_SNR``. The old macro is kept for backward compatibility, but it is deprecated and will emit a compile-time warning.

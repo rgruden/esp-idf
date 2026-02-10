@@ -75,8 +75,8 @@ endfunction()
 # @param[in] new_option the option to replace with (if empty, the old option will be removed)
 #
 # Example usage:
-#   idf_build_replace_options_from_property(COMPILE_OPTIONS "-Werror" "-Werror=all")
-#   idf_build_replace_options_from_property(COMPILE_OPTIONS "-Wno-error=extra" "")
+#   idf_build_replace_option_from_property(COMPILE_OPTIONS "-Werror" "-Werror=all")
+#   idf_build_replace_option_from_property(COMPILE_OPTIONS "-Wno-error=extra" "")
 #
 function(idf_build_replace_option_from_property property_name option_to_remove new_option)
     idf_build_get_property(current_list_of_options ${property_name})
@@ -286,6 +286,8 @@ function(__build_init idf_path)
     # Create the build target, to which the ESP-IDF build properties, dependencies are attached to.
     # Must be global so as to be accessible from any subdirectory in custom projects.
     add_library(__idf_build_target STATIC IMPORTED GLOBAL)
+    # Set the IMPORTED_LOCATION property to avoid errors on IDE codemodel queries with CMake >=4.2
+    set_property(TARGET __idf_build_target PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/dummy.a")
 
     # Set the Python path (which may be passed in via -DPYTHON=) and store in a build property
     set_default(PYTHON "python")

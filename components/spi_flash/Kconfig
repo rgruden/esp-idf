@@ -35,8 +35,7 @@ menu "Main Flash configuration"
 
         choice SPI_FLASH_HPM
             prompt "High Performance Mode (READ DOCS FIRST, > 80MHz)"
-            # Currently, only esp32s3 allows high performance mode.
-            depends on (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32C5) && !ESPTOOLPY_OCT_FLASH
+            depends on SOC_SPI_MEM_FLASH_SUPPORT_HPM && !ESPTOOLPY_OCT_FLASH
             default SPI_FLASH_HPM_AUTO
             help
                 Whether the High Performance Mode of Flash is enabled. As an optional feature, user needs to manually
@@ -457,5 +456,12 @@ menu "SPI Flash driver"
             is kept enabled irrespective of state of flash encryption feature. However, in case
             application is not using flash encryption feature and is in need of some additional
             memory from IRAM region (~1KB) then this config can be disabled.
+
+    config SPI_FLASH_FREQ_LIMIT_C5_240MHZ
+        bool
+        default y if IDF_TARGET_ESP32C5 && ESP_DEFAULT_CPU_FREQ_MHZ_240
+        help
+            Enable frequency limit workaround for encrypted flash writes on ESP32-C5 at 240MHz default CPU frequency.
+            This is an internal configuration, automatically set based on target chip and CPU frequency.
 
 endmenu
