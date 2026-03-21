@@ -96,6 +96,7 @@ INPUT = \
     $(PROJECT_PATH)/components/esp_driver_dac/include/driver/dac_cosine.h \
     $(PROJECT_PATH)/components/esp_driver_dac/include/driver/dac_oneshot.h \
     $(PROJECT_PATH)/components/esp_driver_dac/include/driver/dac_types.h \
+    $(PROJECT_PATH)/components/esp_driver_dma/include/esp_async_crc.h \
     $(PROJECT_PATH)/components/esp_driver_dma/include/esp_async_memcpy.h \
     $(PROJECT_PATH)/components/esp_driver_gpio/include/driver/dedic_gpio.h \
     $(PROJECT_PATH)/components/esp_driver_gpio/include/driver/gpio.h \
@@ -264,6 +265,7 @@ INPUT = \
     $(PROJECT_PATH)/components/esp_wifi/wifi_apps/nan_app/include/esp_nan.h \
     $(PROJECT_PATH)/components/esp-tls/esp_tls_errors.h \
     $(PROJECT_PATH)/components/esp-tls/esp_tls.h \
+    $(PROJECT_PATH)/components/esp-tls/esp_tls_custom_stack.h \
     $(PROJECT_PATH)/components/fatfs/diskio/diskio_impl.h \
     $(PROJECT_PATH)/components/fatfs/diskio/diskio_rawflash.h \
     $(PROJECT_PATH)/components/fatfs/diskio/diskio_sdmmc.h \
@@ -298,6 +300,9 @@ INPUT = \
     $(PROJECT_PATH)/components/mbedtls/esp_crt_bundle/include/esp_crt_bundle.h \
     $(PROJECT_PATH)/components/mbedtls/port/psa_driver/include/psa_crypto_driver_esp_ecdsa_contexts.h \
     $(PROJECT_PATH)/components/mbedtls/port/psa_driver/include/psa_crypto_driver_esp_hmac_opaque_contexts.h \
+    $(PROJECT_PATH)/components/mbedtls/port/psa_driver/include/psa_crypto_driver_esp_rsa_ds_contexts.h \
+    $(PROJECT_PATH)/components/mbedtls/port/psa_driver/include/psa_crypto_driver_esp_sha_contexts.h \
+    $(PROJECT_PATH)/components/mbedtls/port/psa_driver/include/psa_crypto_driver_esp_aes_contexts.h \
     $(PROJECT_PATH)/components/nvs_flash/include/nvs_flash.h \
     $(PROJECT_PATH)/components/nvs_flash/include/nvs.h \
     $(PROJECT_PATH)/components/nvs_flash/include/nvs_bootloader.h \

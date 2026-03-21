@@ -203,7 +203,7 @@ config SOC_PAU_SUPPORTED
     bool
     default y
 
-config SOC_RTC_TIMER_V2_SUPPORTED
+config SOC_RTC_TIMER_SUPPORTED
     bool
     default y
 
@@ -1011,10 +1011,6 @@ config SOC_SPI_MEM_SUPPORT_WRAP
     bool
     default y
 
-config SOC_SPI_MEM_SUPPORT_WB_MODE_INDEPENDENT_CONTROL
-    bool
-    default y
-
 config SOC_SPI_MEM_SUPPORT_CACHE_32BIT_ADDR_MAP
     bool
     default y
@@ -1039,37 +1035,9 @@ config SOC_SPI_MEM_FLASH_SUPPORT_HPM
     bool
     default y
 
-config SOC_SYSTIMER_COUNTER_NUM
+config SOC_MEMSPI_ENCRYPTION_ALIGNMENT
     int
-    default 2
-
-config SOC_SYSTIMER_ALARM_NUM
-    int
-    default 3
-
-config SOC_SYSTIMER_BIT_WIDTH_LO
-    int
-    default 32
-
-config SOC_SYSTIMER_BIT_WIDTH_HI
-    int
-    default 20
-
-config SOC_SYSTIMER_FIXED_DIVIDER
-    bool
-    default y
-
-config SOC_SYSTIMER_SUPPORT_RC_FAST
-    bool
-    default y
-
-config SOC_SYSTIMER_INT_LEVEL
-    bool
-    default y
-
-config SOC_SYSTIMER_ALARM_MISS_COMPENSATE
-    bool
-    default y
+    default 16
 
 config SOC_SYSTIMER_SUPPORT_ETM
     bool
@@ -1082,6 +1050,10 @@ config SOC_LP_TIMER_BIT_WIDTH_LO
 config SOC_LP_TIMER_BIT_WIDTH_HI
     int
     default 16
+
+config SOC_RTC_TIMER_V2
+    bool
+    default y
 
 config SOC_TIMER_SUPPORT_ETM
     bool
@@ -1106,6 +1078,10 @@ config SOC_TWAI_MASK_FILTER_NUM
 config SOC_TWAI_RANGE_FILTER_NUM
     int
     default 1
+
+config SOC_TWAI_SUPPORT_SLEEP_RETENTION
+    bool
+    default y
 
 config SOC_EFUSE_DIS_PAD_JTAG
     bool
@@ -1420,6 +1396,10 @@ config SOC_PM_SUPPORT_PMU_MODEM_STATE
     default y
 
 config SOC_PM_SUPPORT_PMU_CLK_ICG
+    bool
+    default y
+
+config SOC_PM_SUPPORT_MODEM_CLOCK_DOMAIN_ICG
     bool
     default y
 

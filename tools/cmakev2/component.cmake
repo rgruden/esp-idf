@@ -885,12 +885,12 @@ function(idf_component_include name)
     # helps in detecting and reporting circular dependencies, such as
     # C1->C2->C1. In this scenario, C2 can still use the C1 interface target,
     # but C1 will only be fully evaluated after C2 has been evaluated.
-    if("${component_name}" IN_LIST __DEPENDENCY_CHAIN)
-        idf_dbg("Component '${name}' in circular dependency chain '${__DEPENDENCY_CHAIN}'")
+    if("${component_interface}" IN_LIST __DEPENDENCY_CHAIN)
+        idf_dbg("Component '${component_interface}' in circular dependency chain '${__DEPENDENCY_CHAIN}'")
         return()
     endif()
 
-    list(APPEND __DEPENDENCY_CHAIN "${name}")
+    list(APPEND __DEPENDENCY_CHAIN "${component_interface}")
     # Evaluate the CMakeLists.txt file of the component.
     idf_component_get_property(component_build_dir "${component_name}" COMPONENT_BUILD_DIR)
     add_subdirectory("${component_directory}" "${component_build_dir}")
@@ -1055,6 +1055,6 @@ function(idf_component_include name)
     idf_build_get_property(compile_definitions COMPILE_DEFINITIONS GENERATOR_EXPRESSION)
     target_compile_definitions("${component_real_target}" PRIVATE "${compile_definitions}")
 
-    __get_compile_options(OUTPUT compile_options)
+    idf_build_get_compile_options(compile_options)
     target_compile_options("${component_real_target}" BEFORE PRIVATE "${compile_options}")
 endfunction()

@@ -30,10 +30,10 @@
 #include "soc/hp_alive_sys_reg.h"
 #include "hal/uart_ll.h"
 #include "hal/wdt_hal.h"
-#include "esp_private/esp_modem_clock.h"
 #include "esp_private/esp_sleep_internal.h"
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/esp_clk.h"
+#include "esp_private/esp_pmu.h"
 #include "esp_rom_serial_output.h"
 #include "esp_rom_sys.h"
 

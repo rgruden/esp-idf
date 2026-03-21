@@ -7,6 +7,8 @@ Build System v2
 
 ESP-IDF CMake-based build system v2, referred to in this documentation simply as v2 or build system, is a successor to the original CMake-based :doc:`/api-guides/build-system`, referred to as v1. The v2 addresses limitations introduced in the previous version while trying to maintain backward compatibility for components written for v1. The most significant changes include the ability to use Kconfig variables to specify component dependencies, the removal of early component evaluation using CMake script mode, and support for writing components using the native CMake approach. While v2 aims to be as backward compatible with v1 as possible, meaning most components written for v1 should work without modification with v2, there are design differences between v1 and v2 that may require changes in v1 components to work with v2. The incompatibilities are described in :ref:`cmakev2-breaking-changes`.
 
+Example applications for Build System v2 are described in the :example:`Build System v2 examples README <build_system/cmakev2>`.
+
 Creating a New Project
 ======================
 
@@ -431,6 +433,13 @@ Strict Component Precedence
 ---------------------------
 
 The v2 strictly adheres to the component precedence for components with the same name, as described in :ref:`cmake-components-same-name`. While v1 allows components discovered in directories specified with the ``EXTRA_COMPONENT_DIRS`` variable to be overridden by `Local Directory Dependencies`_ specified in the ``idf_component.yml`` manifest file, this is no longer possible in v2.
+
+The Behavior of ``idf_component_optional_requires`` has Changed
+---------------------------------------------------------------
+
+In v1, the ``idf_component_optional_requires`` function adds a dependency on a specified component only if that component is already included in the build (for instance, if it is already required by another component). To achieve this, v1 examines the ``BUILD_COMPONENTS`` build property, which is generated during the early evaluation phase and lists all components involved in the build.
+
+In v2, the ``BUILD_COMPONENTS`` build property is no longer available because the early evaluation phase has been removed. Consequently, the function now adds the dependency if the component is recognized by the build system. This behavior may pull unnecessary components into the build, leading to longer build times. Using ``idf_component_optional_requires`` in v2 should be avoided, instead, optional dependencies should be added using conditional logic based on the project configuration.
 
 API Reference
 =============

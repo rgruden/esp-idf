@@ -67,7 +67,7 @@
 #define SOC_RTC_FAST_MEM_SUPPORTED      1
 #define SOC_RTC_SLOW_MEM_SUPPORTED      1
 #define SOC_RTC_MEM_SUPPORTED           1
-#define SOC_RTC_TIMER_V1_SUPPORTED      1
+#define SOC_RTC_TIMER_SUPPORTED         1
 #define SOC_PSRAM_DMA_CAPABLE           1
 #define SOC_XT_WDT_SUPPORTED            1
 #define SOC_I2S_SUPPORTED               1
@@ -160,6 +160,17 @@
 #define SOC_CPU_WATCHPOINTS_NUM             2
 #define SOC_CPU_WATCHPOINT_MAX_REGION_SIZE  0x40 // bytes
 
+/*-------------------------- DIGITAL SIGNATURE CAPS ----------------------------------------*/
+/** The maximum length of a Digital Signature in bits. */
+#define SOC_DS_SIGNATURE_MAX_BIT_LEN (4096)
+
+/** Initialization vector (IV) length for the RSA key parameter message digest (MD) in bytes. */
+#define SOC_DS_KEY_PARAM_MD_IV_LENGTH (16)
+
+/** Maximum wait time for DS parameter decryption key. If overdue, then key error.
+    See TRM DS chapter for more details */
+#define SOC_DS_KEY_CHECK_MAX_WAIT_US (1100)
+
 /*-------------------------- DAC CAPS ----------------------------------------*/
 #define SOC_DAC_CHAN_NUM      2
 #define SOC_DAC_RESOLUTION      8 // DAC resolution ratio 8 bit
@@ -187,6 +198,10 @@
 // The Clock Out signal is binding to the pin's IO_MUX function
 #define SOC_GPIO_CLOCKOUT_BY_IO_MUX    (1)
 #define SOC_GPIO_CLOCKOUT_CHANNEL_NUM  (3)
+
+/* RTC_CNTL registers on this SoC are not atomic and require software protection
+ * (e.g., spinlocks) when accessed from multiple cores or threads. */
+#define SOC_RTC_CNTL_NEEDS_ATOMIC_ACCESS 1
 
 /*-------------------------- Dedicated GPIO CAPS ---------------------------------------*/
 #define SOC_DEDIC_GPIO_HAS_INTERRUPT    (1) /*!< Dedicated GPIO has its own interrupt source */
@@ -259,16 +274,14 @@
 #define SOC_MEMSPI_SUPPORT_CONTROL_DUMMY_OUT      1
 #define SOC_MEMSPI_IS_INDEPENDENT                 1
 
+#define SOC_MEMSPI_ENCRYPTION_ALIGNMENT           16    /*!< 16-byte alignment restriction to mem addr and size if encryption is enabled */
+
 /*-------------------------- SYSTIMER CAPS ----------------------------------*/
-#define SOC_SYSTIMER_COUNTER_NUM  (1U)  // Number of counter units
-#define SOC_SYSTIMER_ALARM_NUM    3  // Number of alarm units
-#define SOC_SYSTIMER_BIT_WIDTH_LO 32 // Bit width of systimer low part
-#define SOC_SYSTIMER_BIT_WIDTH_HI 32 // Bit width of systimer high part
 
 /*-------------------------- LP_TIMER CAPS ----------------------------------*/
 #define SOC_LP_TIMER_BIT_WIDTH_LO           32 // Bit width of lp_timer low part
 #define SOC_LP_TIMER_BIT_WIDTH_HI           16 // Bit width of lp_timer high part
-#define SOC_RTC_TIMER_SUPPORTED             SOC_RTC_TIMER_V1_SUPPORTED
+#define SOC_RTC_TIMER_V1                    1
 
 /*-------------------------- TOUCH SENSOR CAPS -------------------------------*/
 #define SOC_TOUCH_SENSOR_VERSION            (2)     /*!< Hardware version of touch sensor */
