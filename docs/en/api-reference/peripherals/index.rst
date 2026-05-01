@@ -13,11 +13,12 @@ Peripherals API
     :SOC_BITSCRAMBLER_SUPPORTED: bitscrambler
     :SOC_MIPI_CSI_SUPPORTED: camera_driver
     :SOC_CLK_TREE_SUPPORTED: clk_tree
+    :SOC_CORDIC_SUPPORTED: cordic
     :SOC_DAC_SUPPORTED: dac
     :SOC_ECDSA_SUPPORTED: ecdsa
     :SOC_ETM_SUPPORTED: etm
     gpio
-    gptimer
+    :SOC_GPTIMER_SUPPORTED: gptimer
     :SOC_DEDICATED_GPIO_SUPPORTED: dedic_gpio
     :SOC_HMAC_SUPPORTED: hmac
     :SOC_DIG_SIGN_SUPPORTED: ds
@@ -26,9 +27,10 @@ Peripherals API
     :SOC_I3C_MASTER_SUPPORTED: i3c_master
     :SOC_ISP_SUPPORTED: isp
     :SOC_JPEG_CODEC_SUPPORTED: jpeg
+    :SOC_KEY_MANAGER_SUPPORTED: key_manager
     lcd/index
     :SOC_GP_LDO_SUPPORTED: ldo_regulator
-    ledc
+    :SOC_LEDC_SUPPORTED: ledc
     :SOC_MCPWM_SUPPORTED: mcpwm
     :SOC_PARLIO_SUPPORTED: parlio/index
     :SOC_PCNT_SUPPORTED: pcnt
@@ -48,8 +50,8 @@ Peripherals API
     :SOC_TEMP_SENSOR_SUPPORTED: temp_sensor
     :SOC_TOUCH_SENSOR_SUPPORTED: cap_touch_sens
     :SOC_TWAI_SUPPORTED: twai
-    uart
-    :SOC_USB_OTG_SUPPORTED: usb_device
-    :SOC_USB_OTG_SUPPORTED: usb_host
+    :SOC_UART_SUPPORTED: uart
+    :SOC_USB_OTG_SUPPORTED: USB Device Stack <https://docs.espressif.com/projects/esp-usb/en/latest/{IDF_TARGET_PATH_NAME}/usb_device.html>
+    :SOC_USB_OTG_SUPPORTED: USB Host <https://docs.espressif.com/projects/esp-usb/en/latest/{IDF_TARGET_PATH_NAME}/usb_host.html>
 
 Code examples for this API section are provided in the :example:`peripherals` directory of ESP-IDF examples.

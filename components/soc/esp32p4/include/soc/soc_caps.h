@@ -103,9 +103,11 @@
 #define SOC_PSRAM_DMA_CAPABLE           1
 #define SOC_SDMMC_HOST_SUPPORTED        1
 #define SOC_CLK_TREE_SUPPORTED          1
+#define SOC_REGI2C_SUPPORTED            1
 #define SOC_ASSIST_DEBUG_SUPPORTED      1
 #define SOC_DEBUG_PROBE_SUPPORTED       1
 #define SOC_WDT_SUPPORTED               1
+#define SOC_RTC_WDT_SUPPORTED           1
 #define SOC_SPI_FLASH_SUPPORTED         1
 #define SOC_TOUCH_SENSOR_SUPPORTED      1
 #define SOC_RNG_SUPPORTED               1
@@ -269,7 +271,6 @@
 #define SOC_GPIO_OUT_RANGE_MAX          54
 
 #define SOC_GPIO_HP_PERIPH_PD_SLEEP_WAKEABLE_MASK      (0ULL | 0xFFFF)
-#define SOC_GPIO_HP_PERIPH_PD_SLEEP_WAKEABLE_PIN_CNT   (16)
 
 // digital I/O pad powered by VDD3P3_CPU or VDD_SPI(GPIO_NUM_16~GPIO_NUM_54)
 #define SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK 0x007FFFFFFFFF0000ULL
@@ -303,8 +304,6 @@
 #define SOC_ETM_SUPPORT_SLEEP_RETENTION 1
 
 /*------------------------- Analog Comparator CAPS ---------------------------*/
-#define SOC_ANA_CMPR_NUM                       (2)
-#define SOC_ANA_CMPR_CAN_DISTINGUISH_EDGE      (1)  // Support positive/negative/any cross interrupt
 #define SOC_ANA_CMPR_SUPPORT_ETM               (1)
 
 /*-------------------------- I2C CAPS ----------------------------------------*/
@@ -431,10 +430,10 @@
 
 // USB OTG Caps
 #define SOC_USB_OTG_PERIPH_NUM          (2U)
+#define SOC_USB_FSLS_PHY_NUM            (1U)
 
 // USB PHY Caps
 #define SOC_USB_UTMI_PHY_NUM            (1U)
-#define SOC_USB_UTMI_PHY_NO_POWER_OFF_ISO    1
 
 /*-------------------------- PARLIO CAPS --------------------------------------*/
 #define SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH    16  /*!< Number of data lines of the TX unit */
@@ -508,15 +507,10 @@
 
 /*-------------------------- SPI CAPS ----------------------------------------*/
 #define SOC_SPI_PERIPH_NUM                  3
-#define SOC_SPI_PERIPH_CS_NUM(i)            6
 #define SOC_SPI_MAXIMUM_BUFFER_SIZE         64
 #define SOC_SPI_SUPPORT_SLEEP_RETENTION     1
 #define SOC_SPI_SUPPORT_SLAVE_HD_VER2       1
 #define SOC_SPI_SUPPORT_OCT                 1
-#define SOC_SPI_MAX_BITWIDTH(host_id)       ((host_id == 2) ? 4 : 8) // Supported line mode: SPI3: 1, 2, 4, SPI1/2: 1, 2, 4, 8
-
-/*-------------------------- LP SPI CAPS ----------------------------------------*/
-#define SOC_LP_SPI_MAXIMUM_BUFFER_SIZE     64
 
 /*-------------------------- SPIRAM CAPS ----------------------------------------*/
 #define SOC_SPIRAM_XIP_SUPPORTED        1
@@ -614,6 +608,11 @@
 #define SOC_FLASH_ENCRYPTION_XTS_AES_128    1  /* SOC_EFUSE_XTS_AES_KEY_128 (1) || SOC_KEY_MANAGER_FE_KEY_DEPLOY_XTS_AES_128 (1) */
 #define SOC_FLASH_ENCRYPTION_XTS_AES_256    1  /* SOC_EFUSE_XTS_AES_KEY_256 (1) || SOC_KEY_MANAGER_FE_KEY_DEPLOY_XTS_AES_256 (1) */
 #define SOC_FLASH_ENCRYPTION_XTS_AES_SUPPORT_PSEUDO_ROUND  1 /*!< Only available in chip version above 3.0 */
+#define SOC_FLASH_ENCRYPTION_PAGE_CONFIGURABLE  1  /* Flash encryption can be configured on a MMU page basis */
+
+/*-------------------------- PSRAM Encryption CAPS----------------------------*/
+#define SOC_PSRAM_ENCRYPTION_SEPARATE_KEY       1  /* PSRAM encryption can use independent key */
+#define SOC_PSRAM_ENCRYPTION_PAGE_CONFIGURABLE  1  /* PSRAM encryption can be configured on a MMU page basis */
 
 /*-------------------------- MEMPROT CAPS ------------------------------------*/
 
@@ -640,9 +639,6 @@
 /*-------------------------- LP_VAD CAPS -------------------------------------*/
 #define SOC_LP_I2S_SUPPORT_VAD           (1)
 
-/*--------------------------- UHCI CAPS -------------------------------------*/
-#define SOC_UHCI_NUM               (1UL)
-
 /*-------------------------- COEXISTENCE HARDWARE PTI CAPS -------------------------------*/
 #define SOC_COEX_HW_PTI                 (1)
 
@@ -667,11 +663,15 @@
 #define SOC_PM_SUPPORT_CNNT_PD          (1)
 #define SOC_PM_SUPPORT_RTC_PERIPH_PD    (1)
 
+#define SOC_PM_SUPPORT_PMU_CLK_ICG      (1)
+
 #define SOC_PM_SUPPORT_DEEPSLEEP_CHECK_STUB_ONLY   (1) /*!<Supports CRC only the stub code in RTC memory */
 
 #define SOC_PM_CPU_RETENTION_BY_SW      (1)
 #define SOC_PM_FPU_RETENTION_BY_SW      (1)
 #define SOC_PM_CACHE_RETENTION_BY_PAU   (1)
+
+#define SOC_PM_SLEEP_CLK_ICG_USE_REGDMA (1)
 
 #define SOC_PM_PAU_LINK_NUM             (4)
 #define SOC_PM_PAU_REGDMA_LINK_MULTI_ADDR   (1)
@@ -704,18 +704,22 @@
 #define SOC_TEMPERATURE_SENSOR_SUPPORT_SLEEP_RETENTION       (1)
 
 /*-------------------------- Memory CAPS --------------------------*/
-#define SOC_MEM_TCM_SUPPORTED                      (1)
+#define SOC_MEM_SPM_SUPPORTED                      (1)
 #define SOC_ASYNCHRONOUS_BUS_ERROR_MODE            (1)
 /*--------------------------- EMAC --------------------------------*/
 #define SOC_EMAC_IEEE1588V2_SUPPORTED              (1)      /*!< EMAC Supports IEEE1588v2 time stamping */
 #define SOC_EMAC_USE_MULTI_IO_MUX                  (1)      /*!< Multiple GPIO pad options exist to connect EMAC signal via IO_MUX */
 #define SOC_EMAC_MII_USE_GPIO_MATRIX               (1)      /*!< EMAC MII signals are connected to GPIO pads via GPIO Matrix */
 #define SOC_EMAC_SUPPORT_SLEEP_RETENTION           (1)      /*!< EMAC supports register backup/restore in sleep mode */
+#define SOC_EMAC_REF_CLK_FROM_MPLL                 (1)      /*!< RMII REF CLK can use MPLL as internal clock source */
 
 /*--------------------------- JPEG --------------------------------*/
 #define SOC_JPEG_CODEC_SUPPORTED                  (1)
 #define SOC_JPEG_DECODE_SUPPORTED                 (1)
 #define SOC_JPEG_ENCODE_SUPPORTED                 (1)
+
+/*--------------------------- H264 --------------------------------*/
+#define SOC_H264_ENCODER_SUPPORTED                (1)
 
 /*--------------------------- CAM ---------------------------------*/
 #define SOC_LCDCAM_CAM_SUPPORT_RGB_YUV_CONV         (1)
@@ -727,3 +731,5 @@
 #define SOC_LP_CORE_SUPPORT_ETM                     (1) /*!< LP Core supports ETM */
 #define SOC_LP_CORE_SUPPORT_LP_ADC                  (1) /*!< LP ADC can be accessed from the LP-Core */
 #define SOC_LP_CORE_SUPPORT_STORE_LOAD_EXCEPTIONS   (1) /*!< LP Core will raise exceptions if accessing invalid addresses */
+#define SOC_LP_CORE_SUPPORT_I2C                     (1) /*!< LP Core supports I2C */
+#define SOC_LP_CORE_HW_AUTO_CLRWAKEUPCAUSE          (1) /*!< LP core requests sleep, PMU clears both HP and LP wakeup causes */

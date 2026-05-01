@@ -17,6 +17,7 @@
 #include "pmu_param.h"
 #include "esp_private/esp_pmu.h"
 #include "esp_hw_log.h"
+#include "hal/regi2c_ctrl_ll.h"
 
 ESP_HW_LOG_ATTR_TAG(TAG, "pmu_init");
 
@@ -95,6 +96,7 @@ void pmu_hp_system_init(pmu_context_t *ctx, pmu_hp_mode_t mode, pmu_hp_system_pa
     pmu_ll_hp_set_regulator_sleep_logic_dbias (ctx->hal->dev, mode, anlg->regulator0.slp_logic_dbias);
     pmu_ll_hp_set_regulator_dbias             (ctx->hal->dev, mode, anlg->regulator0.dbias);
     pmu_ll_hp_set_regulator_xpd               (ctx->hal->dev, mode, anlg->regulator0.xpd);
+    pmu_ll_hp_set_regulator_sleep_connect_enable(ctx->hal->dev, mode, anlg->regulator0.slp_connect_en);
     pmu_ll_hp_set_regulator_driver_bar        (ctx->hal->dev, mode, anlg->regulator1.drv_b);
 
     /* Default configuration of hp-system retention sub-system in active, modem
@@ -202,7 +204,12 @@ static void pmu_lp_system_init_default(pmu_context_t *ctx)
 
 void pmu_init(void)
 {
+    /* Peripheral reg i2c power up */
+    regi2c_ctrl_ll_i2c_sar_periph_enable();
+
     pmu_hp_system_init_default(PMU_instance());
     pmu_lp_system_init_default(PMU_instance());
     pmu_power_domain_force_default(PMU_instance());
+
+    WRITE_PERI_REG(PMU_POWER_PD_MEM_CNTL_REG, 0);
 }

@@ -49,8 +49,10 @@
 #define SOC_BOD_SUPPORTED               1
 #define SOC_RTC_TIMER_SUPPORTED         1
 #define SOC_CLK_TREE_SUPPORTED          1
+#define SOC_REGI2C_SUPPORTED            1
 #define SOC_ASSIST_DEBUG_SUPPORTED      1
 #define SOC_WDT_SUPPORTED               1
+#define SOC_RTC_WDT_SUPPORTED           1
 #define SOC_SPI_FLASH_SUPPORTED         1
 #define SOC_RNG_SUPPORTED               1
 #define SOC_LIGHT_SLEEP_SUPPORTED       1
@@ -141,7 +143,6 @@
 #define SOC_GPIO_OUT_RANGE_MAX          20
 
 #define SOC_GPIO_HP_PERIPH_PD_SLEEP_WAKEABLE_MASK          (0ULL | BIT0 | BIT1 | BIT2 | BIT3 | BIT4 | BIT5)
-#define SOC_GPIO_HP_PERIPH_PD_SLEEP_WAKEABLE_PIN_CNT       (6)
 
 // digital I/O pad powered by VDD3P3_CPU or VDD_SPI(GPIO_NUM_6~GPIO_NUM_20)
 #define SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK 0x00000000001FFFC0ULL
@@ -210,12 +211,8 @@
 
 /*-------------------------- SPI CAPS ----------------------------------------*/
 #define SOC_SPI_PERIPH_NUM              2
-#define SOC_SPI_PERIPH_CS_NUM(i)        6
-
 #define SOC_SPI_MAXIMUM_BUFFER_SIZE     64
 #define SOC_SPI_SUPPORT_SLAVE_HD_VER2   1
-#define SOC_SPI_MAX_BITWIDTH(host_id)   (4) // Supported line mode: SPI2: 1, 2, 4
-#define SOC_SPI_SCT_SUPPORTED(host_id)  ((host_id) == 1)
 
 /*-------------------------- SPI MEM CAPS ---------------------------------------*/
 #define SOC_SPI_MEM_SUPPORT_AUTO_WAIT_IDLE                (1)

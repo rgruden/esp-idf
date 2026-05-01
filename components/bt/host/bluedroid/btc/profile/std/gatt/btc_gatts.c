@@ -31,7 +31,7 @@ esp_btc_creat_tab_t *btc_creat_tab_env_ptr;
 #endif
 
 static esp_gatt_status_t btc_gatts_check_valid_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
-                                                                          uint8_t max_nb_attr);
+                                                                          uint16_t max_nb_attr);
 
 static inline void btc_gatts_cb_to_app(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
 {
@@ -40,6 +40,14 @@ static inline void btc_gatts_cb_to_app(esp_gatts_cb_event_t event, esp_gatt_if_t
         BTC_TRACE_DEBUG("btc_gatts_cb_to_app, gatts_if %d, event=%d", gatts_if, event);
         btc_gatts_cb(event, gatts_if, param);
     }
+}
+
+/* Report CREAT_ATTR_TAB error to app and reset env; use on all early-exit error paths in btc_gatts_act_create_attr_tab */
+static void btc_gatts_creat_tab_fail_and_cleanup(esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param)
+{
+    param->add_attr_tab.status = ESP_GATT_ERROR;
+    btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, param);
+    memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
 }
 
 static inline void btc_gatts_uuid_format_convert(esp_bt_uuid_t* dest_uuid, uint16_t src_uuid_len, uint8_t* src_uuid_p)
@@ -258,7 +266,14 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
     //set the attribute table create service flag to true
     btc_creat_tab_env.is_tab_creat_svc = true;
     btc_creat_tab_env.num_handle = max_nb_attr;
+    /* After CHAR_DECLARE, the next row is the characteristic value (any UUID length); skip it here so
+     * a 16-bit characteristic UUID is not mistaken for a descriptor. */
+    bool skip_next_attr_row = false;
     for(int i = 0; i < max_nb_attr; i++){
+        if (skip_next_attr_row) {
+            skip_next_attr_row = false;
+            continue;
+        }
         if(gatts_attr_db[i].att_desc.uuid_length == ESP_UUID_LEN_16){
             uuid = (gatts_attr_db[i].att_desc.uuid_p[1] << 8) + (gatts_attr_db[i].att_desc.uuid_p[0]);
         }
@@ -293,11 +308,13 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
                     btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
                     //reset the env after sent the data to app
                     memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                    future_free(future_p);
                     return;
                 }
 
                  if (future_await(future_p) == FUTURE_FAIL) {
                         BTC_TRACE_ERROR("%s failed\n", __func__);
+                        btc_gatts_creat_tab_fail_and_cleanup(gatts_if, &param);
                         return;
                         }
                     break;
@@ -320,10 +337,12 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
                     btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
                     //reset the env after sent the data to app
                     memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                    future_free(future_p);
                     return;
                 }
                 if (future_await(future_p) == FUTURE_FAIL) {
                         BTC_TRACE_ERROR("%s failed\n", __func__);
+                        btc_gatts_creat_tab_fail_and_cleanup(gatts_if, &param);
                         return;
                         }
                 break;
@@ -338,9 +357,24 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
 
                         if (future_await(future_p) == FUTURE_FAIL) {
                                 BTC_TRACE_ERROR("%s failed\n", __func__);
+                                btc_gatts_creat_tab_fail_and_cleanup(gatts_if, &param);
                                 return;
                             }
+                    } else {
+                        /* svc_start_hdl == 0: service not created, report error and return */
+                        param.add_attr_tab.status = ESP_GATT_ERROR;
+                        btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                        memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                        future_free(future_p);
+                        return;
                     }
+                } else {
+                    /* incl_svc_desc == NULL: no BTA call, future never completed; report error and return */
+                    param.add_attr_tab.status = ESP_GATT_INVALID_PDU;
+                    btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                    memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                    future_free(future_p);
+                    return;
                 }
                 break;
             }
@@ -357,6 +391,20 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
                     svc_hal = btc_creat_tab_env.svc_start_hdl;
                     if((gatts_attr_db[i].att_desc.value) == NULL){
                         BTC_TRACE_ERROR("%s Characteristic declaration should not be NULL\n", __func__);
+                        param.add_attr_tab.status = ESP_GATT_INVALID_PDU;
+                        btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                        memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                        future_free(future_p);
+                        return;
+                    }
+                    else if (i + 1 >= max_nb_attr) {
+                        BTC_TRACE_ERROR("%s Characteristic declaration at index %d missing value attribute\n",
+                                        __func__, i);
+                        param.add_attr_tab.status = ESP_GATT_INVALID_PDU;
+                        btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                        memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                        future_free(future_p);
+                        return;
                     }
                     else{
                         char_property = (uint8_t)(*(uint8_t*)(gatts_attr_db[i].att_desc.value));
@@ -372,9 +420,18 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
 
                         if (future_await(future_p) == FUTURE_FAIL) {
                                 BTC_TRACE_ERROR("%s failed\n", __func__);
+                                btc_gatts_creat_tab_fail_and_cleanup(gatts_if, &param);
                                 return;
                                 }
+                        skip_next_attr_row = true;
                     }
+                } else {
+                    /* svc_start_hdl == 0: service not created, report error and return */
+                    param.add_attr_tab.status = ESP_GATT_ERROR;
+                    btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                    memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                    future_free(future_p);
+                    return;
                 }
 
                 break;
@@ -393,7 +450,8 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
             case ESP_GATT_UUID_ENV_SENSING_CONFIG_DESCR:
             case ESP_GATT_UUID_ENV_SENSING_MEASUREMENT_DESCR:
             case ESP_GATT_UUID_ENV_SENSING_TRIGGER_DESCR:
-            case ESP_GATT_UUID_TIME_TRIGGER_DESCR: {
+            case ESP_GATT_UUID_TIME_TRIGGER_DESCR:
+            default: {
                 uint16_t svc_hal = btc_creat_tab_env.svc_start_hdl;
                 tBT_UUID bta_char_uuid;
                 esp_bt_uuid_t uuid_temp;
@@ -413,14 +471,19 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
 
                     if (future_await(future_p) == FUTURE_FAIL) {
                         BTC_TRACE_ERROR("%s failed\n", __func__);
+                        btc_gatts_creat_tab_fail_and_cleanup(gatts_if, &param);
                         return;
                         }
+                } else {
+                    /* svc_start_hdl == 0: service not created, report error and return */
+                    param.add_attr_tab.status = ESP_GATT_ERROR;
+                    btc_gatts_cb_to_app(ESP_GATTS_CREAT_ATTR_TAB_EVT, gatts_if, &param);
+                    memset(&btc_creat_tab_env, 0, sizeof(esp_btc_creat_tab_t));
+                    future_free(future_p);
+                    return;
                 }
                 break;
             }
-            default:
-                future_free(future_p);
-                break;
         }
 
 
@@ -440,9 +503,9 @@ static void btc_gatts_act_create_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
 }
 
 static esp_gatt_status_t btc_gatts_check_valid_attr_tab(esp_gatts_attr_db_t *gatts_attr_db,
-                                                                          uint8_t max_nb_attr)
+                                                                          uint16_t max_nb_attr)
 {
-    uint8_t svc_num = 0;
+    uint16_t svc_num = 0;
     uint16_t uuid = 0;
 
     for(int i = 0; i < max_nb_attr; i++) {
@@ -601,7 +664,12 @@ static void btc_gatts_inter_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
             case BTA_GATTS_ADD_CHAR_EVT: {
                 uint16_t index = btc_creat_tab_env.handle_idx;
                 btc_creat_tab_env.handles[index] = p_data->add_result.attr_id - 1;
-                btc_creat_tab_env.handles[index+1] = p_data->add_result.attr_id;
+                if (index + 1 < btc_creat_tab_env.num_handle) {
+                    btc_creat_tab_env.handles[index+1] = p_data->add_result.attr_id;
+                } else {
+                    BTC_TRACE_ERROR("%s handles[%d+1] out of bounds (num_handle=%d)",
+                                    __func__, index, btc_creat_tab_env.num_handle);
+                }
                 break;
             }
             case BTA_GATTS_ADD_CHAR_DESCR_EVT: {

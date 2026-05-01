@@ -46,10 +46,10 @@ A secure element (ATECC608) can be also used for the underlying TLS connection i
 
 .. only:: SOC_ECDSA_SUPPORTED
 
-    Use ECDSA Peripheral for TLS
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    Use ECDSA Digital Signature Peripheral (ECDSA_DS) for TLS
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    The ECDSA peripheral can be used for the underlying TLS connection in the HTTP client connection. Please refer to the **ECDSA Peripheral with ESP-TLS** section in the :doc:`ESP-TLS documentation </api-reference/protocols/esp_tls>` for more details. The HTTP client can be configured to use ECDSA peripheral as follows:
+    The ECDSA Digital Signature Peripheral (ECDSA_DS) can be used for the underlying TLS connection in the HTTP client connection. Please refer to the **ECDSA Digital Signature Peripheral (ECDSA_DS) with ESP-TLS** section in the :doc:`ESP-TLS documentation </api-reference/protocols/esp_tls>` for more details. The HTTP client can be configured to use the ECDSA_DS peripheral as follows:
 
     .. code-block:: c
 
@@ -81,8 +81,10 @@ Some applications need to open the connection and control the exchange of data a
 
     * :cpp:func:`esp_http_client_init`: Create a HTTP client handle.
     * ``esp_http_client_set_*`` or ``esp_http_client_delete_*``: Modify the HTTP connection parameters (optional).
-    * :cpp:func:`esp_http_client_open`: Open the HTTP connection with ``write_len`` parameter (content length that needs to be written to server), set ``write_len=0`` for read-only connection.
+    * :cpp:func:`esp_http_client_open`: Open the HTTP connection with ``write_len`` parameter (content length that needs to be written to server), set ``write_len=0`` for read-only connection and set ``write_len=-1`` for chunked encoded data transfer.
     * :cpp:func:`esp_http_client_write`: Write data to server with a maximum length equal to ``write_len`` of :cpp:func:`esp_http_client_open` function; no need to call this function for ``write_len=0``.
+    * :cpp:func:`esp_http_client_chunk_write_begin`: Begin a chunk by sending the chunk header (size line) when using chunked transfer encoding (``write_len=-1``).
+    * :cpp:func:`esp_http_client_chunk_write_end`: End a chunk by sending the chunk trailer when using chunked transfer encoding.
     * :cpp:func:`esp_http_client_fetch_headers`: Read the HTTP Server response headers, after sending the request headers and server data (if any). Returns the ``content-length`` from the server and can be succeeded by :cpp:func:`esp_http_client_get_status_code` for getting the HTTP status of the connection.
     * :cpp:func:`esp_http_client_read`: Read the HTTP stream.
     * :cpp:func:`esp_http_client_close`: Close the connection.

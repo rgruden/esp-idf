@@ -23,6 +23,7 @@
 #include "hal/hal_utils.h"
 
 #define I2S_LL_GET(_attr)       I2S_LL_ ## _attr
+#define I2S_LL_SUPPORT(_feat)   I2S_LL_SUPPORT_ ## _feat
 #define I2S_LL_INST_NUM         1
 
 #ifdef __cplusplus
@@ -286,6 +287,42 @@ static inline void i2s_ll_rx_clk_set_src(i2s_dev_t *hw, i2s_clock_src_t src)
     default:
         HAL_ASSERT(false && "unsupported clock source");
         break;
+    }
+}
+
+/**
+ * @brief Get TX source clock
+ *
+ * @param hw Peripheral I2S hardware instance address.
+ * @return Current TX clock source (i2s_clock_src_t).
+ */
+static inline i2s_clock_src_t i2s_ll_tx_clk_get_src(i2s_dev_t *hw)
+{
+    (void)hw;
+    switch (PCR.i2s_tx_clkm_conf.i2s_tx_clkm_sel) {
+    case 0: return (i2s_clock_src_t)I2S_CLK_SRC_XTAL;
+    case 1: return (i2s_clock_src_t)I2S_CLK_SRC_PLL_240M;
+    case 2: return (i2s_clock_src_t)I2S_CLK_SRC_PLL_160M;
+    case 3: return (i2s_clock_src_t)I2S_CLK_SRC_EXTERNAL;
+    default: return (i2s_clock_src_t)I2S_CLK_SRC_DEFAULT;
+    }
+}
+
+/**
+ * @brief Get RX source clock
+ *
+ * @param hw Peripheral I2S hardware instance address.
+ * @return Current RX clock source (i2s_clock_src_t).
+ */
+static inline i2s_clock_src_t i2s_ll_rx_clk_get_src(i2s_dev_t *hw)
+{
+    (void)hw;
+    switch (PCR.i2s_rx_clkm_conf.i2s_rx_clkm_sel) {
+    case 0: return (i2s_clock_src_t)I2S_CLK_SRC_XTAL;
+    case 1: return (i2s_clock_src_t)I2S_CLK_SRC_PLL_240M;
+    case 2: return (i2s_clock_src_t)I2S_CLK_SRC_PLL_160M;
+    case 3: return (i2s_clock_src_t)I2S_CLK_SRC_EXTERNAL;
+    default: return (i2s_clock_src_t)I2S_CLK_SRC_DEFAULT;
     }
 }
 

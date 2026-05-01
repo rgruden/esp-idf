@@ -48,7 +48,7 @@ MCPWM 外设是一个多功能 PWM 生成器，集成多个子模块，在电力
     - :ref:`mcpwm-generator-force-actions` - 介绍如何强制异步控制生成器的输出水平。
     - :ref:`mcpwm-synchronization` - 介绍如何同步 MCPWM 定时器，并确保生成的最终输出 PWM 信号具有固定的相位差。
     - :ref:`mcpwm-capture` - 介绍如何使用 MCPWM 捕获模块测量信号脉宽。
-    :SOC_MCPWM_SUPPORT_ETM: - :ref:`mcpwm-etm-event-and-task` - MCPWM 提供了哪些事件和任务可以连接到 ETM 通道上。
+    :SOC_MCPWM_SUPPORT_ETM and SOC_ETM_SUPPORTED: - :ref:`mcpwm-etm-event-and-task` - MCPWM 提供了哪些事件和任务可以连接到 ETM 通道上。
     - :ref:`mcpwm-power-management` - 介绍不同的时钟源对功耗的影响。
     - :ref:`mcpwm-resolution-config` - 介绍 MCPWM 子模块的分辨率配置规则。
     - :ref:`mcpwm-iram-safe` - 介绍如何协调 RMT 中断与禁用缓存。
@@ -107,6 +107,8 @@ MCPWM 操作器
 
 反之，调用 :cpp:func:`mcpwm_del_operator` 函数将释放已分配的操作器。
 
+.. _mcpwm-comparators:
+
 MCPWM 比较器
 ~~~~~~~~~~~~~~~~~
 
@@ -121,7 +123,7 @@ MCPWM 比较器
 
 反之，调用 :cpp:func:`mcpwm_del_comparator` 函数将释放已分配的比较器。
 
-.. only:: SOC_MCPWM_SUPPORT_EVENT_COMPARATOR and SOC_MCPWM_SUPPORT_ETM
+.. only:: SOC_MCPWM_SUPPORT_EVENT_COMPARATOR and SOC_MCPWM_SUPPORT_ETM and SOC_ETM_SUPPORTED
 
     MCPWM 中还有另外一种比较器 —— “事件比较器”，它不能直接控制 PWM 的输出，只能用来产生 EMT 子系统中使用到的事件。事件比较器能够设置的阈值也是可配的。调用 :cpp:func:`mcpwm_new_event_comparator` 函数可以申请一个事件比较器，该函数返回的句柄类型和 :cpp:func:`mcpwm_new_comparator` 函数一样，但是需要的配置结构体是不同的。事件比较器的配置位于 :cpp:type:`mcpwm_event_comparator_config_t`。更多相关内容请参阅 :ref:`mcpwm-etm-event-and-task`。
 
@@ -137,6 +139,8 @@ MCPWM 生成器
 分配成功后，:cpp:func:`mcpwm_new_generator` 将返回一个指向已分配生成器的指针。否则，函数将返回错误代码。具体来说，当 MCPWM 操作器中没有空闲生成器时，将返回 :c:macro:`ESP_ERR_NOT_FOUND` 错误。[1]_
 
 反之，调用 :cpp:func:`mcpwm_del_generator` 函数将释放已分配的生成器。
+
+.. _mcpwm-faults:
 
 MCPWM 故障
 ~~~~~~~~~~~~
@@ -158,6 +162,8 @@ MCPWM 故障分为两种类型：来自 GPIO 的故障信号和软件故障。
 分配成功后，:cpp:func:`mcpwm_new_soft_fault` 将返回一个指向已分配故障的指针。否则，函数将返回错误代码。具体来说，当内存不足以支持该故障对象时，将返回 :c:macro:`ESP_ERR_NO_MEM` 错误。虽然软件故障和 GPIO 故障是不同类型的故障，但返回的故障句柄为同一类型。
 
 反之，调用 :cpp:func:`mcpwm_del_fault` 函数将释放已分配的故障。此函数同时适用于软件故障和 GPIO 故障。
+
+.. _mcpwm-sync-sources:
 
 MCPWM 同步源
 ~~~~~~~~~~~~~~~~~~
@@ -185,6 +191,8 @@ MCPWM 同步源
 分配成功后，:cpp:func:`mcpwm_new_soft_sync_src` 将返回一个指向已分配同步源的指针。否则，函数将返回错误代码。具体来说，当内存不足以支持分配的同步源时，将返回 :c:macro:`ESP_ERR_NO_MEM` 错误。需注意，为确保软件同步源能够正常工作，应预先调用 :cpp:func:`mcpwm_soft_sync_activate`。
 
 相反，调用 :cpp:func:`mcpwm_del_sync_src` 函数将释放分配的同步源对象。此函数适用于所有类型的同步源。
+
+.. _mcpwm-capture-timer-and-channels:
 
 MCPWM 捕获定时器和通道
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -258,6 +266,8 @@ MCPWM 定时器运行时会生成不同的事件。若有函数需在特定事�
 函数 :cpp:func:`mcpwm_timer_register_event_callbacks` 中的 ``user_data`` 参数用于保存用户上下文，将直接传递至各个回调函数。
 
 此函数会在不启用 MCPWM 定时器的情况下延迟安装其中断服务。因此，需在调用 :cpp:func:`mcpwm_timer_enable` 函数前调用该函数，否则将返回 :c:macro:`ESP_ERR_INVALID_STATE` 错误。更多信息请参见 `启用和禁用定时器`_。
+
+.. _mcpwm-enable-and-disable-timer:
 
 启用和禁用定时器
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -337,7 +347,7 @@ MCPWM 比较器可以在定时器计数器等于比较值时发送通知。若�
 单个生成器可以针对不同的比较器事件配置多种操作。为此，应针对每个比较事件-操作对分别调用 :cpp:func:`mcpwm_generator_set_action_on_compare_event`。每个操作的详细配置通过结构体 :cpp:type:`mcpwm_gen_compare_event_action_t` 指定。
 
 - :cpp:member:`mcpwm_gen_compare_event_action_t::direction` 指定定时器计数方向，可以调用 :cpp:type:`mcpwm_timer_direction_t` 查看支持的方向。
-- :cpp:member:`mcpwm_gen_compare_event_action_t::comparator` 指定比较器句柄。有关分配比较器的方法，请参见 `MCPWM 比较器`_。
+- :cpp:member:`mcpwm_gen_compare_event_action_t::comparator` 指定比较器句柄。有关分配比较器的方法，请参见 :ref:`mcpwm-comparators`。
 - :cpp:member:`mcpwm_gen_compare_event_action_t::action` 指定随即进行的生成器操作，可以调用 :cpp:type:`mcpwm_generator_action_t` 查看支持的操作。
 
 可借助辅助宏 :c:macro:`MCPWM_GEN_COMPARE_EVENT_ACTION` 构建比较事件操作条目。
@@ -348,7 +358,7 @@ MCPWM 比较器可以在定时器计数器等于比较值时发送通知。若�
 单个发生器可以配置为在故障事件发生时执行多个操作。要实现此功能，请针对每个期望的操作调用 :cpp:func:`mcpwm_generator_set_action_on_fault_event`。具体的操作由 :cpp:type:`mcpwm_gen_fault_event_action_t` 结构体描述。
 
 - :cpp:member:`mcpwm_gen_fault_event_action_t::direction` 指定定时器计数方向，可以调用 :cpp:type:`mcpwm_timer_direction_t` 查看支持的方向。
-- :cpp:member:`mcpwm_gen_fault_event_action_t::fault` 指定用于触发器的故障。有关分配故障的方法，请参见 `MCPWM 故障`_。
+- :cpp:member:`mcpwm_gen_fault_event_action_t::fault` 指定用于触发器的故障。有关分配故障的方法，请参见 :ref:`mcpwm-faults`。
 - :cpp:member:`mcpwm_gen_fault_event_action_t::action` 指定随即进行的生成器操作，可以调用 :cpp:type:`mcpwm_generator_action_t` 查看支持的操作。
 
 当生成器所属的操作器中没有空闲触发器时，将返回 :c:macro:`ESP_ERR_NOT_FOUND` 错误。[1]_
@@ -853,7 +863,7 @@ MCPWM 定时器接收到同步信号后，定时器将强制进入一个预定�
 
     当 MCPWM 定时器在 :cpp:enumerator:`MCPWM_TIMER_COUNT_MODE_UP_DOWN` 模式下工作时，需要特别注意。在该模式下，计数器范围 ``[0 -> peak-1]`` 属于 **递增** 阶段， ``[peak -> 1]`` 属于 **递减** 阶段。因此，如果你将 :cpp:member:`mcpwm_timer_sync_phase_config_t::count_value` 设置为零，则可能还需要将 :cpp:member:`mcpwm_timer_sync_phase_config_t::direction` 设置为 :cpp:enumerator:`MCPWM_TIMER_DIRECTION_UP`。否则，计时器将继续维持递减阶段，计数值会下溢至峰值。
 
-同理， `MCPWM 捕获定时器和通道`_ 也支持同步。调用 :cpp:func:`mcpwm_capture_timer_set_phase_on_sync`，设置捕获定时器的同步相位。同步相位配置定义在 :cpp:type:`mcpwm_capture_timer_sync_phase_config_t` 结构体中：
+同理，:ref:`MCPWM 捕获定时器 <mcpwm-capture-timer-and-channels>` 也支持同步。调用 :cpp:func:`mcpwm_capture_timer_set_phase_on_sync`，设置捕获定时器的同步相位。同步相位配置定义在 :cpp:type:`mcpwm_capture_timer_sync_phase_config_t` 结构体中：
 
 - :cpp:member:`mcpwm_capture_timer_sync_phase_config_t::sync_src` 设置同步信号源。关于如何创建一个同步源对象，请参见 `MCPWM 同步源`_。具体来说，当此参数设置为 ``NULL`` 时，驱动器将禁用 MCPWM 捕获定时器的同步功能。
 - :cpp:member:`mcpwm_capture_timer_sync_phase_config_t::count_value` 设置接收同步信号后加载至计数器的值。
@@ -953,7 +963,7 @@ MCPWM 捕获通道支持在信号上检测到有效边沿时发送通知。须�
 
 如果不想在捕获事件回调函数中处理捕获值，而是想在其他地方处理，可以调用 :cpp:func:`mcpwm_capture_get_latched_value` 获得上一次锁存的捕获值。
 
-.. only:: SOC_MCPWM_SUPPORT_ETM
+.. only:: SOC_MCPWM_SUPPORT_ETM and SOC_ETM_SUPPORTED
 
     .. _mcpwm-etm-event-and-task:
 
@@ -966,7 +976,7 @@ MCPWM 捕获通道支持在信号上检测到有效边沿时发送通知。须�
 
     .. _mcpwm-power-management:
 
-.. only:: not SOC_MCPWM_SUPPORT_ETM
+.. only:: not (SOC_MCPWM_SUPPORT_ETM and SOC_ETM_SUPPORTED)
 
     .. _mcpwm-power-management:
 
@@ -1056,15 +1066,77 @@ Kconfig 选项
 API 参考
 -------------
 
+MCPWM API 分为以下几部分：
+
+* `定时器 API`_
+* `操作器 API`_
+* `比较器 API`_
+* `生成器 API`_
+* `故障 API`_
+* `同步 API`_
+* `捕获 API`_
+* `ETM API`_
+* `驱动类型`_
+* `HAL 类型`_
+
+
+定时器 API
+^^^^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_timer.inc
+
+
+操作器 API
+^^^^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_oper.inc
+
+
+比较器 API
+^^^^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_cmpr.inc
+
+
+生成器 API
+^^^^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_gen.inc
+
+
+故障 API
+^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_fault.inc
+
+
+同步 API
+^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_sync.inc
+
+
+捕获 API
+^^^^^^^^
+
 .. include-build-file:: inc/mcpwm_cap.inc
+
+
+ETM API
+^^^^^^^
+
 .. include-build-file:: inc/mcpwm_etm.inc
+
+
+驱动类型
+^^^^^^^^
+
 .. include-build-file:: inc/components/esp_driver_mcpwm/include/driver/mcpwm_types.inc
+
+
+HAL 类型
+^^^^^^^^
+
 .. include-build-file:: inc/components/esp_hal_mcpwm/include/hal/mcpwm_types.inc
 
 

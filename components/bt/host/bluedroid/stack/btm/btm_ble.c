@@ -904,7 +904,7 @@ tBTM_STATUS BTM_SetBleDataLength(BD_ADDR bd_addr, UINT16 tx_pdu_length)
         } else if (tx_pdu_length < BTM_BLE_DATA_SIZE_MIN) {
             tx_pdu_length =  BTM_BLE_DATA_SIZE_MIN;
         }
-
+        p_acl->data_len_updating = true;
         /* always set the TxTime to be max, as controller does not care for now */
         btsnd_hcic_ble_set_data_length(p_acl->hci_handle, tx_pdu_length,
                                        BTM_BLE_DATA_TX_TIME_MAX);
@@ -2173,9 +2173,7 @@ UINT8 btm_proc_smp_cback(tSMP_EVT event, BD_ADDR bd_addr, tSMP_EVT_DATA *p_data)
         case SMP_OOB_REQ_EVT:
         case SMP_NC_REQ_EVT:
         case SMP_SC_OOB_REQ_EVT:
-            /* fall through */
-            p_dev_rec->sec_flags |= BTM_SEC_LE_AUTHENTICATED;
-
+        /* fall through */
         case SMP_SEC_REQUEST_EVT:
             if (event == SMP_SEC_REQUEST_EVT && btm_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
                 BTM_TRACE_DEBUG("%s: Ignoring SMP Security request", __func__);

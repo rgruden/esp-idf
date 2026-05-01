@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2019-2025 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2019-2026 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 import json
 import os
@@ -27,9 +27,9 @@ except ImportError:
     import idf
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
-idf_py_path = os.path.join(current_dir, '..', 'idf.py')
+idf_py_path = os.path.normpath(os.path.join(current_dir, '..', 'idf.py'))
 extension_path = os.path.join(current_dir, 'test_idf_extensions', 'test_ext')
-py_actions_path = os.path.join(current_dir, '..', 'idf_py_actions')
+py_actions_path = os.path.normpath(os.path.join(current_dir, '..', 'idf_py_actions'))
 link_path = os.path.join(py_actions_path, 'test_ext')
 
 
@@ -48,50 +48,61 @@ class TestWithoutExtensions(TestCase):
 
         super().setUpClass()
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.env_patcher.stop()
+        super().tearDownClass()
+
 
 class TestExtensions(TestWithoutExtensions):
-    def test_extension_loading(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Create symlink once for all tests in this class
+        # Handle race conditions with parallel test execution (pytest-xdist)
         try:
             os.symlink(extension_path, link_path)
-            os.environ['IDF_EXTRA_ACTIONS_PATH'] = os.path.join(current_dir, 'extra_path')
-            output = subprocess.check_output([sys.executable, idf_py_path, '--help'], env=os.environ).decode(
-                'utf-8', 'ignore'
-            )
+        except FileExistsError:
+            # Another worker already created it - that's fine
+            pass
+        os.environ['IDF_EXTRA_ACTIONS_PATH'] = os.path.join(current_dir, 'extra_path')
 
-            self.assertIn('--test-extension-option', output)
-            self.assertIn('test_subcommand', output)
-            self.assertIn('--some-extension-option', output)
-            self.assertIn('extra_subcommand', output)
-        finally:
+    @classmethod
+    def tearDownClass(cls):
+        # Clean up symlink after all tests complete
+        # Use try/except to handle race conditions with parallel execution
+        try:
             os.remove(link_path)
+        except FileNotFoundError:
+            # Another worker already removed it - that's fine
+            pass
+        super().tearDownClass()
+
+    def test_extension_loading(self):
+        output = subprocess.check_output([sys.executable, idf_py_path, '--help'], env=os.environ).decode(
+            'utf-8', 'ignore'
+        )
+        self.assertIn('--test-extension-option', output)
+        self.assertIn('test_subcommand', output)
+        self.assertIn('--some-extension-option', output)
+        self.assertIn('extra_subcommand', output)
 
     def test_extension_execution(self):
-        try:
-            os.symlink(extension_path, link_path)
-            os.environ['IDF_EXTRA_ACTIONS_PATH'] = ';'.join([os.path.join(current_dir, 'extra_path')])
-            output = subprocess.check_output(
-                [sys.executable, idf_py_path, '--some-extension-option=awesome', 'test_subcommand', 'extra_subcommand'],
-                env=os.environ,
-            ).decode('utf-8', 'ignore')
-            self.assertIn('!!! From some global callback: awesome', output)
-            self.assertIn('!!! From some subcommand', output)
-            self.assertIn('!!! From test global callback: test', output)
-            self.assertIn('!!! From some subcommand', output)
-        finally:
-            os.remove(link_path)
+        output = subprocess.check_output(
+            [sys.executable, idf_py_path, '--some-extension-option=awesome', 'test_subcommand', 'extra_subcommand'],
+            env=os.environ,
+        ).decode('utf-8', 'ignore')
+        self.assertIn('!!! From some global callback: awesome', output)
+        self.assertIn('!!! From some subcommand', output)
+        self.assertIn('!!! From test global callback: test', output)
+        self.assertIn('!!! From some subcommand', output)
 
     def test_hidden_commands(self):
-        try:
-            os.symlink(extension_path, link_path)
-            os.environ['IDF_EXTRA_ACTIONS_PATH'] = ';'.join([os.path.join(current_dir, 'extra_path')])
-            output = subprocess.check_output([sys.executable, idf_py_path, '--help'], env=os.environ).decode(
-                'utf-8', 'ignore'
-            )
-            self.assertIn('test_subcommand', output)
-            self.assertNotIn('hidden_one', output)
-
-        finally:
-            os.remove(link_path)
+        output = subprocess.check_output([sys.executable, idf_py_path, '--help'], env=os.environ).decode(
+            'utf-8', 'ignore'
+        )
+        self.assertIn('test_subcommand', output)
+        self.assertNotIn('hidden_one', output)
 
 
 class TestDependencyManagement(TestWithoutExtensions):

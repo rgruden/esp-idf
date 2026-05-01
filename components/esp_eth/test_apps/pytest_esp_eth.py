@@ -51,7 +51,7 @@ class EthTestIntf:
     def configure_eth_if(self, eth_type: int = 0) -> Iterator[socket.socket]:
         if eth_type == 0:
             eth_type = self.eth_type
-        so = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(eth_type))
+        so = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(eth_type))  # type: ignore
         so.bind((self.target_if, 0))
         try:
             yield so
@@ -252,7 +252,7 @@ def ethernet_heap_alloc_test(dut: IdfDut, test_if: str = '') -> None:
 
 
 # ----------- IP101 -----------
-@pytest.mark.ethernet
+@pytest.mark.eth_ip101
 @pytest.mark.parametrize('config', ['default_generic', 'release_generic', 'single_core_generic'], indirect=True)
 @pytest.mark.flaky(reruns=3, reruns_delay=5)
 @idf_parametrize('target', ['esp32'], indirect=['target'])
@@ -260,7 +260,7 @@ def test_esp_ethernet(dut: IdfDut) -> None:
     ethernet_test(dut)
 
 
-@pytest.mark.ethernet
+@pytest.mark.eth_ip101
 @pytest.mark.parametrize(
     'config',
     [
@@ -288,12 +288,25 @@ def test_esp_eth_ip101(dut: IdfDut) -> None:
     ethernet_l2_test(dut)
 
 
+@pytest.mark.eth_ip101
+@pytest.mark.parametrize(
+    'config',
+    [
+        'rmii_clko_esp32',
+    ],
+    indirect=True,
+)
+@idf_parametrize('target', ['esp32'], indirect=['target'])
+def test_esp32_emac_clko(dut: IdfDut) -> None:
+    dut.run_all_single_board_cases(group='esp_emac_clk_out')
+
+
 # ----------- IP101 ESP32P4 -----------
 @pytest.mark.parametrize(
     'config, target',
     [
         pytest.param('default_generic_esp32p4', 'esp32p4', marks=[pytest.mark.eth_ip101]),
-        pytest.param('default_generic_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_eco4]),
+        pytest.param('default_generic_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_rev1]),
     ],
     indirect=['target'],
 )
@@ -307,7 +320,7 @@ def test_esp32p4_ethernet(dut: IdfDut) -> None:
     'config, target',
     [
         pytest.param('default_generic_esp32p4', 'esp32p4', marks=[pytest.mark.eth_ip101]),
-        pytest.param('default_generic_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_eco4]),
+        pytest.param('default_generic_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_rev1]),
     ],
     indirect=['target'],
 )
@@ -321,7 +334,7 @@ def test_esp32p4_emac(dut: IdfDut) -> None:
     'config, target',
     [
         pytest.param('rmii_clko_esp32p4', 'esp32p4', marks=[pytest.mark.eth_ip101]),
-        pytest.param('rmii_clko_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_eco4]),
+        pytest.param('rmii_clko_esp32p4v1', 'esp32p4', marks=[pytest.mark.eth_ip101, pytest.mark.esp32p4_rev1]),
     ],
     indirect=['target'],
 )
@@ -399,7 +412,6 @@ def test_esp_eth_dp83848(dut: IdfDut) -> None:
     'config',
     [
         'default_w5500',
-        'poll_w5500',
     ],
     indirect=True,
 )
@@ -418,7 +430,6 @@ def test_esp_eth_w5500(dut: IdfDut) -> None:
     'config',
     [
         'default_ksz8851snl',
-        'poll_ksz8851snl',
     ],
     indirect=True,
 )
@@ -437,7 +448,6 @@ def test_esp_eth_ksz8851snl(dut: IdfDut) -> None:
     'config',
     [
         'default_dm9051',
-        'poll_dm9051',
     ],
     indirect=True,
 )

@@ -309,6 +309,7 @@ extern void ets_backup_dma_copy(uint32_t reg, uint32_t mem_addr, uint32_t num, b
 
 extern void btdm_cca_feature_enable(void);
 extern void btdm_aa_check_enhance_enable(void);
+extern void ble_min_conn_interval_enable(uint16_t min_interval);
 
 /* BLE Log module */
 #if CONFIG_BT_CTRL_LE_LOG_EN
@@ -1348,6 +1349,9 @@ static void btdm_funcs_table_ready_wrapper(void)
 #if BLE_CTRL_CHECK_CONNECT_IND_ACCESS_ADDRESS_ENABLED
     btdm_aa_check_enhance_enable();
 #endif
+#if CONFIG_BT_CTRL_BLE_MIN_CONN_INTERVAL_ENABLE
+    ble_min_conn_interval_enable(3); // 3 * 1.25 = 3.75ms
+#endif
 #if CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY
     // do nothing
 #else
@@ -1867,14 +1871,17 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
     ESP_LOGI(BT_LOG_TAG,"Put all controller code in flash");
 #endif
 
-    if ((err = btdm_low_power_mode_init(cfg)) != ESP_OK) {
-        ESP_LOGE(BT_LOG_TAG, "Low power module initialization failed");
-        goto error;
-    }
 
 #if CONFIG_SW_COEXIST_ENABLE
     coex_init();
 #endif
+
+    /* Must call periph_module_enable(BT) before any step that may goto error,
+     * otherwise bt_controller_deinit_internal() will call periph_module_disable(BT)
+     * when ref is still 0, causing ref underflow (0-1=255) and subsequent
+     * init/enable failures (EM BASE MISMATCH, BLE assert, etc.) */
+     periph_module_enable(PERIPH_BT_MODULE);
+     periph_module_reset(PERIPH_BT_MODULE);
 
 #if CONFIG_BLE_LOG_ENABLED
     if (!ble_log_init()) {
@@ -1892,8 +1899,11 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 #endif // CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED
 #endif /* CONFIG_BLE_LOG_ENABLED */
 
-    periph_module_enable(PERIPH_BT_MODULE);
-    periph_module_reset(PERIPH_BT_MODULE);
+if ((err = btdm_low_power_mode_init(cfg)) != ESP_OK) {
+    ESP_LOGE(BT_LOG_TAG, "Low power module initialization failed");
+    goto error;
+}
+
 
 #if CONFIG_BT_CTRL_LE_LOG_EN
     err = esp_bt_controller_log_init(log_output_mode);

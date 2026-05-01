@@ -3,7 +3,7 @@ I2S
 
 :link_to_translation:`en:[English]`
 
-{IDF_TARGET_I2S_NUM:default="1", esp32="2", esp32s3="2", esp32p4="3"}
+{IDF_TARGET_I2S_NUM:default="1", esp32="2", esp32s3="2", esp32p4="3", esp32s31="2"}
 {IDF_TARGET_I2S_STD_TDM:default="标准和 TDM", esp32="标准", esp32s2="标准"}
 
 简介
@@ -47,34 +47,6 @@ I2S（Inter-IC Sound，集成电路内置音频总线）是一种同步串行通
 
     每个控制器都有独立的 RX 和 TX 通道，连接到不同 GPIO 管脚，能够在不同的时钟和声道配置下工作。注意，尽管在一个控制器上 TX 通道和 RX 通道的内部 MCLK 相互独立，但输出的 MCLK 信号只能连接到一个通道。如果需要两个互相独立的 MCLK 输出，必须将其分配到不同的 I2S 控制器上。
 
-I2S 文件结构
-------------
-
-.. figure:: ../../../_static/diagrams/i2s/i2s_file_structure.png
-    :align: center
-    :alt: I2S 文件结构
-
-    I2S 文件结构
-
-**需要包含在 I2S 应用中的公共头文件如下所示：**
-
-.. list::
-
-    - ``i2s.h``：提供原有 I2S API（用于使用原有驱动的应用）。
-    - ``i2s_std.h``：提供标准通信模式的 API（用于使用标准模式的新驱动程序的应用）。
-    :SOC_I2S_SUPPORTS_PDM: - ``i2s_pdm.h``：提供 PDM 通信模式的 API（用于使用 PDM 模式的新驱动程序的应用）。
-    :SOC_I2S_SUPPORTS_TDM: - ``i2s_tdm.h``：提供 TDM 通信模式的 API（用于使用 TDM 模式的新驱动的应用）。
-
-.. note::
-
-    原有驱动与新驱动无法共存。包含 ``i2s.h`` 以使用原有驱动，或包含其他三个头文件以使用新驱动。原有驱动未来可能会被删除。
-
-**已包含在上述头文件中的公共头文件如下所示：**
-
-- ``i2s_types_legacy.h``：提供只在原有驱动中使用的原有公共类型。
-- ``i2s_types.h``：提供公共类型。
-- ``i2s_common.h``：提供所有通信模式通用的 API。
-
 I2S 时钟
 --------
 
@@ -83,12 +55,14 @@ I2S 时钟
 
 .. list::
 
-    - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_DEFAULT`：默认 PLL 时钟。
+    - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_DEFAULT`：默认时钟源。实际时钟源取决于具体芯片，详情请参阅芯片技术参考手册。
     :SOC_I2S_SUPPORTS_PLL_F160M: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_160M`：160 MHz PLL 时钟。
     :SOC_I2S_SUPPORTS_PLL_F120M: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_120M`：120 MHz PLL 时钟。
     :SOC_I2S_SUPPORTS_PLL_F96M: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_96M`：96 MHz PLL 时钟。
     :SOC_I2S_SUPPORTS_PLL_F240M: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_240M`：240 MHz PLL 时钟。
-    :SOC_I2S_SUPPORTS_APLL: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_APLL`：音频 PLL 时钟，在高采样率应用中比 ``I2S_CLK_SRC_PLL_160M`` 更精确。其频率可根据采样率进行配置，但如果 APLL 已经被 EMAC 或其他通道占用，则无法更改 APLL 频率，驱动程序将尝试在原有 APLL 频率下工作。如果原有 APLL 频率无法满足 I2S 的需求，时钟配置将失败。
+    :SOC_I2S_SUPPORTS_APLL: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_APLL`：音频 PLL 时钟。其频率可根据采样率进行配置，在高采样率应用中精度更高。但如果 APLL 已经被 EMAC 或其他通道占用，则无法更改 APLL 频率，驱动程序将尝试在原有 APLL 频率下工作。如果原有 APLL 频率无法满足 I2S 的需求，时钟配置将失败。
+    :SOC_I2S_SUPPORTS_RC_FAST: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_RC_FAST`：RC_FAST 时钟源。
+    :SOC_I2S_SUPPORTS_EXTERNAL: - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_EXTERNAL`：外部时钟源。
 
 时钟术语
 ^^^^^^^^
@@ -324,6 +298,8 @@ I2S 的数据传输（包括数据发送和接收）由 DMA 实现。在传输�
 - :cpp:func:`i2s_channel_preload_data`: 用于预加载音频数据到 I2S 内部缓存，使得 TX 通道使能后能够立即发送数据，以此降低音频初始输出延迟。
 - :cpp:func:`i2s_channel_tune_rate`: 用于在运行时动态微调音频速率，以匹配音频数据生产者和消费者的速度，从而防止因速率不匹配导致的中间缓存数据累积或不足。
 
+.. _i2s-iram-safe:
+
 IRAM 安全
 ^^^^^^^^^
 
@@ -345,7 +321,7 @@ IRAM 安全
 Kconfig 选项
 ^^^^^^^^^^^^
 
-- :ref:`CONFIG_I2S_ISR_IRAM_SAFE` 控制默认 ISR 处理程序能否在禁用 cache 的情况下工作。更多信息可参考 `IRAM 安全 <#iram-safe>`__。
+- :ref:`CONFIG_I2S_ISR_IRAM_SAFE` 控制默认 ISR 处理程序能否在禁用 cache 的情况下工作。更多信息可参考 :ref:`i2s-iram-safe`。
 - :ref:`CONFIG_I2S_ENABLE_DEBUG_LOG` 用于启用调试日志输出。启用该选项将增加固件的二进制文件大小。
 
 应用实例

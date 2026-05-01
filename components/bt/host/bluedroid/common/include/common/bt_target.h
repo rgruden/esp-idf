@@ -78,6 +78,8 @@
 #define ENC_KEY_SIZE_CTRL_MODE_VSC  2
 #define ENC_KEY_SIZE_CTRL_MODE      UC_BT_ENC_KEY_SIZE_CTRL_MODE
 
+#define ESP_BT_CLASSIC_ENABLE_POWER_CTRL_VSC UC_BT_CLASSIC_ENABLE_POWER_CTRL_VSC
+
 #if (UC_BT_A2DP_ENABLED == TRUE)
 #define BTA_AR_INCLUDED             TRUE
 #define BTA_AV_INCLUDED             TRUE
@@ -439,6 +441,13 @@
 #define BT_BLE_FEAT_CHANNEL_SOUNDING     FALSE
 #endif
 
+/* LE Monitor Advertisement (Bluetooth Core 6.0) */
+#if (BLE_50_FEATURE_SUPPORT == TRUE) && (defined UC_BT_BLE_FEAT_ADV_MONITOR) && (UC_BT_BLE_FEAT_ADV_MONITOR == TRUE)
+#define BLE_FEAT_ADV_MONITOR     TRUE
+#else
+#define BLE_FEAT_ADV_MONITOR     FALSE
+#endif
+
 #if (UC_BT_BLE_VENDOR_HCI_EN == TRUE)
 #define BLE_VENDOR_HCI_EN TRUE
 #else
@@ -449,6 +458,31 @@
 #define BLE_HIGH_DUTY_ADV_INTERVAL TRUE
 #else
 #define BLE_HIGH_DUTY_ADV_INTERVAL FALSE
+#endif
+
+/* Minimum BLE connection interval (in 1.25 ms units) enforced by the Bluedroid
+ * host parameter validation.
+ *
+ *   - When host-side validation keeps the Core Spec floor: 0x0006 (7.5 ms).
+ *   - When validation is relaxed for sub-spec intervals: 0x0001 (1.25 ms) so
+ *     host-side checks no longer enforce the Core Spec minimum; whether a
+ *     smaller connection interval is allowed and the real lower limit depend
+ *     entirely on Controller capability and its own configuration (option
+ *     names differ by Controller). Whether the relaxed mode is used is
+ *     determined by how the Host is integrated with the Controller for each
+ *     product, not documented here.
+ *
+ * Note: the relaxed lower bound is 0x0001 rather than 0x0000 so that all
+ * existing `uint16_t < MIN` / `uint16_t >= MIN` range checks in the stack
+ * remain well-defined under GCC `-Wtype-limits`. Since 0 is not a valid HCI
+ * connection interval anyway, this is functionally equivalent to disabling
+ * the host-side minimum check. */
+#ifndef BLE_CONN_INT_MIN_HW
+#if (UC_BT_BLE_HOST_ALLOW_SUB_SPEC_MIN_CONN_INT == 1)
+#define BLE_CONN_INT_MIN_HW             0x0001
+#else
+#define BLE_CONN_INT_MIN_HW             0x0006
+#endif
 #endif
 
 #if (UC_BT_BLE_RPA_SUPPORTED  == TRUE)
@@ -677,10 +711,6 @@
 
 #ifndef BTA_DM_QOS_INCLUDED
 #define BTA_DM_QOS_INCLUDED FALSE
-#endif
-
-#ifndef BTA_PAN_INCLUDED
-#define BTA_PAN_INCLUDED FALSE
 #endif
 
 #ifndef BTA_HD_INCLUDED
@@ -1410,6 +1440,19 @@
 #define BTM_BLE_CONFORMANCE_TESTING           FALSE
 #endif
 
+#if (CLASSIC_BT_INCLUDED == TRUE)
+#if (BT_CONTROLLER_INCLUDED == TRUE) && (CONFIG_IDF_TARGET_ESP32)
+#define BR_EDR_SET_CTRL_SCO_DATAPATH     (TRUE)
+#else
+#define BR_EDR_SET_CTRL_SCO_DATAPATH     (FALSE)
+#endif
+
+#if (BT_CONTROLLER_INCLUDED == TRUE) && (CONFIG_IDF_TARGET_ESP32)
+#define BR_EDR_GET_EIR_TX_PWR_LEVEL      (TRUE)
+#else
+#define BR_EDR_GET_EIR_TX_PWR_LEVEL      (FALSE)
+#endif
+#endif
 /******************************************************************************
 **
 ** CONTROLLER TO HOST FLOW CONTROL

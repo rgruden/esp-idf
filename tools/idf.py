@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: 2019-2025 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2019-2026 Espressif Systems (Shanghai) CO LTD
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -38,6 +38,7 @@ sys.dont_write_bytecode = True
 import python_version_checker  # noqa: E402
 
 try:
+    import idf_py_actions.help_custom_targets_skip as _help_custom_targets
     from idf_py_actions.errors import FatalError
     from idf_py_actions.tools import PROG
     from idf_py_actions.tools import SHELL_COMPLETE_RUN
@@ -45,6 +46,7 @@ try:
     from idf_py_actions.tools import PropertyDict
     from idf_py_actions.tools import debug_print_idf_version
     from idf_py_actions.tools import get_target
+    from idf_py_actions.tools import idf_version_from_cmake
     from idf_py_actions.tools import merge_action_lists
     from idf_py_actions.tools import print_warning
 
@@ -746,6 +748,113 @@ def init_cli(verbose_output: list | None = None) -> Any:
 
             return tasks_to_run
 
+        def _get_custom_targets(self) -> list[tuple[str, str]]:
+            """
+            List likely user-facing phony targets: ``ninja -t targets`` when possible;
+            else ``cmake --build … help``.
+            """
+            # Note: ``project_dir`` and ``resolve_build_dir()`` are captured from the enclosing init_cli scope and
+            # resolved at call-time (when formatting help), not at function definition time.
+            build_dir = resolve_build_dir()
+            cache = os.path.join(build_dir, 'CMakeCache.txt')
+            ninja_file = os.path.join(build_dir, 'build.ninja')
+            makefile = os.path.join(build_dir, 'Makefile')
+            if not (os.path.isfile(cache) or os.path.isfile(ninja_file) or os.path.isfile(makefile)):
+                return []
+
+            def configure_ready_for_cmake_help() -> bool:
+                """
+                Skip ``cmake --build`` until configure has run
+                and root ``CMakeLists.txt`` is not newer than the cache.
+                """
+                if not os.path.isfile(cache):
+                    return False
+                root_cml = os.path.join(project_dir, 'CMakeLists.txt')
+                if not os.path.isfile(root_cml):
+                    return True
+                try:
+                    return os.path.getmtime(root_cml) <= os.path.getmtime(cache)
+                except OSError:
+                    return False
+
+            defined = set(self._actions.keys()) | set(self.commands_with_aliases.keys())
+            found: set[str] = set()
+
+            def add_from_help_text(text: str) -> None:
+                for raw in text.splitlines():
+                    line = _help_custom_targets.strip_cmake_help_listing_quotes(raw.strip())
+                    m = _help_custom_targets.PHONY_BUILD_LINE_RE.match(line)
+                    if m and m.group(2).lower() == 'phony':
+                        n = m.group(1).strip()
+                        if _help_custom_targets.should_list_custom_target(n, defined):
+                            found.add(n)
+                    elif line.startswith('...'):
+                        rest = line[3:].lstrip()
+                        if rest:
+                            n = rest.split()[0]
+                            if _help_custom_targets.should_list_custom_target(n, defined):
+                                found.add(n)
+
+            if os.path.isfile(ninja_file):
+                try:
+                    r = subprocess.run(
+                        ['ninja', '-t', 'targets', 'all'],
+                        cwd=build_dir,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace',
+                        timeout=_help_custom_targets.NINJA_TARGETS_HELP_TIMEOUT_SEC,
+                    )
+                    if r.returncode == 0:
+                        add_from_help_text((r.stdout or '') + (r.stderr or ''))
+                except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+                    print_warning(f'Failed querying Ninja custom targets with "ninja -t targets all": {exc}')
+                    pass
+
+                # If ``ninja -t`` produced nothing we could parse (empty output, different format, etc.),
+                # still read ``build.ninja`` so ``--help`` works without Ninja on PATH and without CMake.
+                if not found:
+                    try:
+                        with open(ninja_file, encoding='utf-8', errors='replace') as f:
+                            for raw in f:
+                                m = _help_custom_targets.NINJA_BUILD_PHONY_RE.match(raw)
+                                if not m:
+                                    continue
+                                outputs = m.group(1).strip()
+                                for n in _help_custom_targets.split_ninja_build_outputs(outputs):
+                                    if _help_custom_targets.should_list_custom_target(n, defined):
+                                        found.add(n)
+                    except OSError as exc:
+                        print_warning(f'Failed reading Ninja file {ninja_file} for custom targets: {exc}')
+                        pass
+
+            if not found and configure_ready_for_cmake_help():
+                try:
+                    r = subprocess.run(
+                        ['cmake', '--build', build_dir, '--target', 'help'],
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace',
+                        timeout=_help_custom_targets.CMAKE_BUILD_HELP_TIMEOUT_SEC,
+                    )
+                    if r.returncode == 0:
+                        add_from_help_text((r.stdout or '') + (r.stderr or ''))
+                except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+                    print_warning(f'Failed querying CMake custom targets with "cmake --build --target help": {exc}')
+                    pass
+
+            return [(n, '') for n in sorted(found, key=str.lower)]
+
+        def format_help(self, ctx: click.core.Context, formatter: click.HelpFormatter) -> None:
+            """Override to append custom CMake targets section."""
+            super().format_help(ctx, formatter)
+            targets = self._get_custom_targets()
+            if targets:
+                with formatter.section('CMake Custom Targets'):
+                    formatter.write_dl(list(targets))
+
     def load_cli_extension_from_dir(ext_dir: str) -> Any | None:
         """Load extension 'idf_ext.py' from directory and return the action_extensions function"""
         ext_file = os.path.join(ext_dir, 'idf_ext.py')
@@ -830,6 +939,75 @@ def init_cli(verbose_output: list | None = None) -> Any:
                 return keyword + path.split(keyword, 1)[1]
         return path
 
+    # Mutable dict used as a cache keyed by lock path
+    # Both keys are populated on first call for each path and retained for subsequent calls.
+    _trusted_names_cache: dict[str, set[str]] = {}
+
+    def _get_trusted_names_from_lock(lock_path: str) -> set[str]:
+        """Return set of lock dependency names (e.g. espressif/mdns)
+        that are from the ESP Component Registry under the espressif/ namespace.
+
+        Result is cached by lock_path after the first call.
+        """
+        if lock_path in _trusted_names_cache:
+            return _trusted_names_cache[lock_path]
+        result: set[str] = set()
+        _trusted_names_cache[lock_path] = result
+
+        if not os.path.isfile(lock_path) or os.getenv('IDF_COMPONENT_MANAGER') == '0':
+            return result
+
+        try:
+            from idf_component_tools.constants import IDF_COMPONENT_REGISTRY_URL
+            from idf_component_tools.errors import LockError
+            from idf_component_tools.lock.manager import LockManager
+            from idf_component_tools.sources import WebServiceSource
+
+            solution = LockManager(lock_path).load()
+            registry_url_norm = IDF_COMPONENT_REGISTRY_URL.rstrip('/')
+            for comp in solution.dependencies:
+                if not isinstance(comp.source, WebServiceSource):
+                    continue
+                if comp.source.registry_url.rstrip('/') == registry_url_norm and (comp.name or '').startswith(
+                    'espressif/'
+                ):
+                    result.add(comp.name)
+        except (ImportError, OSError, LockError) as e:
+            print_warning(
+                'WARNING: Could not verify source of external components. '
+                f'No extensions (idf_ext.py) from managed components will be loaded. ({e})'
+            )
+
+        return result
+
+    def _resolve_idf_managed_lock_path() -> str | None:
+        """Return path to dependencies.lock for IDF-managed components, or None if unavailable."""
+        idf_tools_path = os.environ.get('IDF_TOOLS_PATH') or os.path.expanduser(os.path.join('~', '.espressif'))
+        ver = idf_version_from_cmake()  # returns e.g. 'v6.1.0', or None on failure
+        if not ver:
+            return None
+        ver_str = ver.lstrip('v')  # '6.1.0'
+        return os.path.join(idf_tools_path, 'root_managed_components', f'idf{ver_str}', 'dependencies.lock')
+
+    def _is_component_trusted(
+        comp_name: str,
+        source: str | None,
+    ) -> bool:
+        """True iff this component is from a trusted source (IDF, project, or Espressif component from ESP-registry)."""
+        if source in ('idf_components', 'project_components', 'project_extra_components'):
+            return True
+        if source == 'project_managed_components':
+            # Lock key: internal name uses __ (e.g. espressif__mdns), lock uses / (e.g. espressif/mdns)
+            lock_key = comp_name.replace('__', '/', 1) if '__' in comp_name else comp_name
+            return lock_key in _get_trusted_names_from_lock(os.path.join(project_dir, 'dependencies.lock'))
+        if source == 'idf_managed_components':
+            lock_path = _resolve_idf_managed_lock_path()
+            if lock_path is None:
+                return False
+            lock_key = comp_name.replace('__', '/', 1) if '__' in comp_name else comp_name
+            return lock_key in _get_trusted_names_from_lock(lock_path)
+        return False
+
     # That's a tiny parser that parse project-dir even before constructing
     # fully featured click parser to be sure that extensions are loaded from the right place
     @click.command(
@@ -884,20 +1062,43 @@ def init_cli(verbose_output: list | None = None) -> Any:
             print_warning(f'WARNING: Cannot load idf.py extension "{name}"')
 
     component_idf_ext_dirs = []
-    # Get component directories with idf extensions that participate in the build
+    # Get trusted component directories with idf extensions that participate in the build
+    project_desc = None
     build_dir_path = resolve_build_dir()
     project_description_json_file = os.path.join(build_dir_path, 'project_description.json')
     if os.path.exists(project_description_json_file):
         try:
             with open(project_description_json_file, encoding='utf-8') as f:
                 project_desc = json.load(f)
-                all_component_info = project_desc.get('build_component_info', {})
-                for _, comp_info in all_component_info.items():
-                    comp_dir = comp_info.get('dir')
-                    if comp_dir and os.path.isdir(comp_dir) and os.path.exists(os.path.join(comp_dir, 'idf_ext.py')):
-                        component_idf_ext_dirs.append(comp_dir)
         except (OSError, json.JSONDecodeError) as e:
             print_warning(f'Warning: Failed to read component info from project_description.json: {e}')
+    if project_desc is not None:
+        build_component_info = project_desc.get('build_component_info', {})
+        all_component_info = project_desc.get('all_component_info', {})
+
+        # The trust check runs during init_cli, before the main Click CLI is parsed,
+        # so only the env var is supported (a CLI flag would require early argv parsing).
+        skip_extension_trust_check = os.environ.get('IDF_EXTENSION_ALLOW_UNTRUSTED', '').lower() in ('1', 'true', 'yes')
+
+        for comp_name, comp_info in build_component_info.items():
+            comp_dir = comp_info.get('dir')
+            if not comp_dir or not os.path.isdir(comp_dir) or not os.path.exists(os.path.join(comp_dir, 'idf_ext.py')):
+                continue
+            if skip_extension_trust_check:
+                component_idf_ext_dirs.append(comp_dir)
+            else:
+                source = all_component_info.get(comp_name, {}).get('source')
+                if _is_component_trusted(comp_name, source):
+                    component_idf_ext_dirs.append(comp_dir)
+                else:
+                    print_warning(
+                        f'WARNING: Not loading component extension from untrusted source '
+                        f'"{_extract_relevant_path(comp_dir)}". '
+                        'Only extensions from trusted sources are loaded. Run '
+                        '"idf.py docs -sp api-guides/tools/idf-py.html#extending-idf-py" '
+                        'for the list of trusted sources. Set IDF_EXTENSION_ALLOW_UNTRUSTED=1 to load all.'
+                    )
+
     # Load extensions from directories that participate in the build (components and project)
     for ext_dir in component_idf_ext_dirs + [project_dir]:
         extension_func = load_cli_extension_from_dir(ext_dir)

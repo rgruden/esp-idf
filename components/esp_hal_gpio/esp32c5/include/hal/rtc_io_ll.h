@@ -25,7 +25,9 @@
 #include "hal/misc.h"
 #include "hal/assert.h"
 
-#define RTCIO_LL_PIN_FUNC       1
+#define RTCIO_LL_PIN_FUNC           1
+
+#define RTCIO_LL_GPIO_NUM_OFFSET    0 // rtcio 0-6 correspond to gpio 0-6
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,8 +90,6 @@ static inline void rtcio_ll_function_select(int rtcio_num, rtcio_ll_func_t func)
         uint32_t sel_mask = HAL_FORCE_READ_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel);
         sel_mask |= BIT(rtcio_num);
         HAL_FORCE_MODIFY_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel, sel_mask);
-        // LP_GPIO is FUNC 1
-        rtcio_ll_iomux_func_sel(rtcio_num, RTCIO_LL_PIN_FUNC);
     } else if (func == RTCIO_LL_FUNC_DIGITAL) {
         // Clear the bit to use digital GPIO module
         uint32_t sel_mask = HAL_FORCE_READ_U32_REG_FIELD(LP_AON.gpio_mux, gpio_mux_sel);

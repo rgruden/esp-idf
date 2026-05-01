@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -161,7 +161,7 @@ TEST_CASE("Test esp_efuse_write_key for virt mode", "[efuse]")
     int tmp_purpose = 0;
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_efuse_write_key(EFUSE_BLK3, tmp_purpose,  &rd_key, sizeof(rd_key)));
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_efuse_write_key(EFUSE_BLK_KEY0, tmp_purpose, &rd_key, 33));
-    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_efuse_write_key(EFUSE_BLK10, tmp_purpose, &rd_key, sizeof(rd_key)));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_efuse_write_key(EFUSE_BLK_SYS_DATA_PART2, tmp_purpose, &rd_key, sizeof(rd_key)));
 
     for (esp_efuse_purpose_t g_purpose = ESP_EFUSE_KEY_PURPOSE_USER; g_purpose < ESP_EFUSE_KEY_PURPOSE_MAX; ++g_purpose) {
         if (g_purpose == ESP_EFUSE_KEY_PURPOSE_USER) {
@@ -189,8 +189,8 @@ TEST_CASE("Test esp_efuse_write_key for virt mode", "[efuse]")
                 purpose == ESP_EFUSE_KEY_PURPOSE_ECDSA_KEY ||
 #endif
                 purpose == ESP_EFUSE_KEY_PURPOSE_XTS_AES_128_KEY)) {
-                printf("BLOCK9 can not have the %d purpose, use RESERVED instead\n", purpose);
-                purpose = ESP_EFUSE_KEY_PURPOSE_RESERVED;
+                printf("BLOCK9 can not have the %d purpose, use ESP_EFUSE_KEY_PURPOSE_USER instead\n", purpose);
+                purpose = ESP_EFUSE_KEY_PURPOSE_USER;
             }
 #endif // SOC_EFUSE_BLOCK9_KEY_PURPOSE_QUIRK
             int id = num_key - EFUSE_BLK_KEY0;
@@ -198,6 +198,9 @@ TEST_CASE("Test esp_efuse_write_key for virt mode", "[efuse]")
             test_write_key(num_key, purpose);
             TEST_ASSERT_EQUAL(id, esp_efuse_count_unused_key_blocks());
 
+            if (num_key == EFUSE_BLK9 && purpose == ESP_EFUSE_KEY_PURPOSE_USER) {
+                continue;  // Skip checking purpose for BLOCK9 if it is set to PURPOSE_USER due to the quirk, since there may be other purpose set in this block before.
+            }
             esp_efuse_block_t key_block = EFUSE_BLK_KEY_MAX;
             TEST_ASSERT_TRUE(esp_efuse_find_purpose(purpose, &key_block));
             TEST_ASSERT_EQUAL(num_key, key_block);
@@ -223,7 +226,7 @@ TEST_CASE("Test 1 esp_efuse_write_key for FPGA", "[efuse]")
 #if SOC_EFUSE_ECDSA_KEY
         ESP_EFUSE_KEY_PURPOSE_ECDSA_KEY,
 #else
-        ESP_EFUSE_KEY_PURPOSE_RESERVED,
+        ESP_EFUSE_KEY_PURPOSE_USER,
 #endif
 #ifdef SOC_EFUSE_XTS_AES_KEY_256
         ESP_EFUSE_KEY_PURPOSE_XTS_AES_256_KEY_1,

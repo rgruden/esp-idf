@@ -25,7 +25,7 @@ IDF 前端工具 - ``idf.py``
 
     idf.py create-project <project name>
 
-此命令将创建一个新的 ESP-IDF 工程。此外，使用 ``--path`` 选项可指定工程创建路径。
+此命令用于创建一个新的 ESP-IDF 工程。此外，使用 ``--path`` 参数，可以指定项目的创建路径。使用 ``--cpp`` 参数，可以生成 C++ 源文件（<项目名称>.cpp），而不是生成默认的 ``.c`` 文件，同时 ``app_main`` 函数将保持 C 语言链接方式。
 
 创建新组件：``create-component``
 ----------------------------------------
@@ -109,20 +109,54 @@ ESP-IDF 支持多个目标芯片，运行 ``idf.py --list-targets`` 查看当前
 
 此命令将删除所有 build 目录下的内容，包括 CMake 配置输出。下次构建时，CMake 将重新配置其输出。注意，此命令将递归删除 build 目录下的 *所有* 文件（工程配置将保留），请谨慎使用。
 
+.. _flash-with-idf-py:
+
 烧录工程：``flash``
 ------------------------
 
 .. code-block:: bash
 
-  idf.py flash
+    idf.py flash
 
 此命令将在需要时自动构建工程，随后将其烧录到目标芯片。使用 ``-p`` 和 ``-b`` 选项可分别设置串口名称和烧录程序的波特率。
 
-.. note:: 环境变量 ``ESPPORT`` 和 ``ESPBAUD`` 可分别设置 ``-p`` 和 ``-b`` 选项的默认值，在命令行上设置这些选项的参数可覆盖默认值。
+.. note::
 
-``idf.py`` 在内部使用 ``esptool`` 的 ``write-flash`` 命令来烧录目标设备。通过 ``--extra-args`` 选项传递额外的参数，并配置烧录过程。例如，要 `写入到外部 SPI flash 芯片 <https://docs.espressif.com/projects/esptool/en/latest/esptool/advanced-options.html#custom-spi-pin-configuration>`_，请使用以下命令： ``idf.py flash --extra-args="--spi-connection <CLK>,<Q>,<D>,<HD>,<CS>"``。要查看所有可用参数，请运行 ``esptool write-flash --help`` 或查看 `esptool 文档 <https://docs.espressif.com/projects/esptool/en/latest/esptool/index.html>`_。
+    环境变量 ``ESPPORT`` 和 ``ESPBAUD`` 可分别用于设置 ``-p`` 和 ``-b`` 选项的默认值。若在命令行中显式提供这些选项，则将覆盖默认值。
 
-与 ``build`` 命令类似，使用 ``app``、``bootloader`` 或 ``partition-table`` 参数运行此命令，可选择仅烧录应用程序、引导加载程序或分区表。
+``idf.py`` 在内部使用 ``esptool`` 的 ``write-flash`` 命令来烧录目标设备。可以通过 ``--extra-args`` 选项传递额外的参数，并配置烧录过程。例如，要 `写入到外部 SPI flash 芯片 <https://docs.espressif.com/projects/esptool/en/latest/esptool/advanced-options.html#custom-spi-pin-configuration>`_，请使用以下命令：``idf.py flash --extra-args="--spi-connection <CLK>,<Q>,<D>,<HD>,<CS>"``。要查看所有可用参数，请运行 ``esptool write-flash --help`` 或查看 `esptool 文档 <https://docs.espressif.com/projects/esptool/en/latest/esptool/index.html>`_。
+
+与 ``build`` 命令类似，运行 ``flash`` 命令时还可以添加 ``app``、``bootloader`` 或 ``partition-table`` 参数，选择仅烧录应用程序、引导加载程序或分区表。
+
+默认情况下，若存在已烧录的二进制文件，则 ``idf.py flash`` 命令会尝试进行快速重新烧录（只重新烧录已更改的数据扇区，而非整个二进制文件）：如果构建目录中存在 ``*_flashed.bin`` 文件，构建系统会配置 ``esptool`` 仅写入已更改的 flash 区域，加快开发过程中的重复烧录速度。随后会对 flash 中所有已烧录的文件进行校验，确保其内容符合预期。若 flash 中的任何文件与预期内容不一致，则会改为执行全量烧录。
+
+若不存在 ``*_flashed.bin`` 文件，则 ``idf.py flash`` 会配置 esptool 先检查设备的 flash 内容，并跳过已存在于 flash 中的文件（使用 ``idf.py flash -a`` 或 ``--all`` 参数时不适用此行为）。
+
+每次成功烧录后，构建系统会在构建目录中保存所有已烧录文件（引导加载程序、分区表、应用程序以及其他任何资源）的副本，文件名带有 ``_flashed`` 后缀（例如，``bootloader_flashed.bin``、``partition-table_flashed.bin``）。下次执行 ``idf.py flash`` 命令时会自动使用这些文件，以便快速重新烧录。
+
+无论是否启用 :ref:`CONFIG_APP_BUILD_MINIMIZE_BINARY_CHANGES` 选项，快速重新烧录都可正常工作。启用该选项可调整应用程序二进制文件的布局，使修改集中在局部区域，从而进一步提升重新烧录的效率，需要重写的 flash 扇区会减少。但该选项可能会增加应用程序二进制文件的大小，不建议用于生产构建。
+
+全量烧录
+^^^^^^^^
+
+.. code-block:: bash
+
+    idf.py flash -a
+
+    idf.py flash --all
+
+``-a`` 或 ``--all`` 选项始终执行全量烧录（并非仅重新烧录已更改的扇区，而是烧录整个二进制文件）。在擦除 flash 之后、在烧录 flash 为空的新设备时，或在不想依赖先前的二进制文件时可以使用该参数。
+
+信任 flash 内容模式
+^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+    idf.py flash -t
+
+    idf.py flash --trust-flash-content
+
+使用快速重新烧录时，使用 ``-t`` 或 ``--trust-flash-content`` 参数可以跳过对不需要重新烧录的文件（例如，如果 ``bootloader.bin`` 自上次烧录以来没有变化）的 MD5 校验，以加快烧录过程。仅在确定设备 flash 内容自上次执行 ``idf.py flash`` 以来未被修改的情况下使用此选项。
 
 .. _merging-binaries:
 
@@ -267,44 +301,96 @@ uf2 二进制文件也可以通过 :ref:`idf.py uf2 <generate-uf2-binary>` 生�
 
 此命令将打印 ``otadata`` 分区的内容，该分区存储当前所选 OTA 应用程序分区的信息。有关 ``otadata`` 分区的更多信息，请参阅 :doc:`/api-reference/system/ota`。
 
-启动 MCP 服务器：``mcp-server``
----------------------------------
+ESP-IDF MCP 服务器
+------------------
+
+ESP-IDF 的 MCP（Model Context Protocol，模型上下文协议）服务器可实现 AI 与 ESP-IDF 项目的集成。该 MCP 服务器提供工具和资源，使 AI 助手能够通过标准化协议与 ESP-IDF 项目交互。通过自然语言，即可向 AI 助手下达诸如“设定目标芯片为 esp32”或“构建项目”之类的命令。
+
+启动 MCP 服务器
+^^^^^^^^^^^^^^^
+
+要配合 AI 助手使用 MCP 服务器，可配置智能体或 IDE 启动该服务器。具体来说，有两种实现方式：
+
+1. 使用 ``eim run`` （推荐）：通过 ESP-IDF 安装管理器 (ESP-IDF Installation Manager, EIM) 在已激活的 ESP-IDF 环境中启动一个新进程。该功能需要 EIM 0.8.1 或更高版本，且 **ESP-IDF 必须通过 EIM 安装程序安装**。该方案是最简单的选项，且无需先在 shell 中激活 ESP-IDF 环境。
+
+.. code-block:: bash
+
+  eim run "idf.py mcp-server"
+
+2. 直接使用 ``idf.py``：在已激活 ESP-IDF 环境的 shell 中运行 ``idf.py mcp-server`` 命令启动 MCP 服务器。必须在有效的 ESP-IDF 项目目录中执行该命令，或者使用 ``idf.py -C <project_dir> mcp-server`` 指定项目路径。
 
 .. code-block:: bash
 
   idf.py mcp-server
 
-此命令将启动 MCP（模型上下文协议）服务器，实现 AI 与 ESP-IDF 项目的集成。该服务器通过标准化协议提供工具和资源，使 AI 助手能够与 ESP-IDF 项目进行交互。
+.. note::
 
-MCP 服务器提供以下工具：
+    MCP 服务器需要通过 EIM 安装器来安装 ``mcp`` 功能。有关如何安装特定功能，请参见 `EIM 文档 ＞ CLI 配置 - 全局功能 <https://docs.espressif.com/projects/idf-im-ui/en/latest/cli_configuration.html#global-features-all-versions>`_。
 
-- ``build_project``：使用指定目标芯片构建 ESP-IDF 项目
-- ``set_target``：设置 ESP-IDF 目标芯片（esp32、esp32s3、esp32c6 等）
-- ``flash_project``：将构建好的项目烧录至已连接设备
-- ``monitor_serial``：启动串行监视器（在后台运行）
-- ``clean_project``：清理构建产物
-- ``menuconfig``：打开 menuconfig 界面（基于终端）
+可用工具与资源
+^^^^^^^^^^^^^^
+
+MCP 服务器提供以下可用的命令：
+
+- ``set target``：设置 ESP-IDF 的目标芯片（esp32，esp32s3，esp32c6 等）
+- ``build project``：使用当前目标构建 ESP-IDF 项目
+- ``flash project``：将已构建的项目烧录到已连接的设备，通过端口名称进行指定。
+- ``clean project``：清理构建产物
 
 同时提供以下资源：
 
 - ``project://config``：获取当前项目配置
-- ``project://status``：获取当前项目构建状态
-- ``project://devices``：获取已连接的 ESP 设备列表
+- ``project://status``：获取当前项目的构建状态和构建产物
+- ``project://devices``：获取已连接的设备列表
 
-.. note::
+将 ESP-IDF MCP 服务器添加至 IDE 和 AI 智能体
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    运行 MCP 服务器需提前安装 ``mcp`` Python 包。可通过以下命令安装：``./install.sh --enable-mcp``。
+Cursor IDE
+~~~~~~~~~~
 
-将 ESP-IDF MCP 服务器添加到 IDE
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+将 ESP-IDF MCP 服务器配置添加至 Cursor 的 ``mcp.json`` 文件中：
 
-**Claude Desktop：**
+.. code-block:: json
 
-使用 Claude CLI 添加 ESP-IDF MCP 服务器：
+  {
+    "mcpServers": {
+      "esp-idf-eim": {
+        "command": "eim",
+        "args": [
+          "run",
+          "idf.py mcp-server"
+        ],
+        "env": {
+          "IDF_MCP_WORKSPACE_FOLDER": "${workspaceFolder}"
+        }
+      }
+    }
+  }
+
+若想在 Cursor IDE 中使用 ESP-IDF MCP 服务器，请打开 ESP-IDF 项目文件夹并使用 AI 聊天窗口，AI 助手能够访问 ESP-IDF 专用工具，并帮助构建、烧录和管理项目。
+
+MCP 服务器能够通过 ``IDF_MCP_WORKSPACE_FOLDER`` 环境变量确认哪个目录包含 ESP-IDF 项目，确保服务器在正确的项目上下文中运行，使其能够访问项目的配置和构建文件，并在正确的位置执行诸如构建和烧录之类的操作。
+
+Claude 桌面版
+~~~~~~~~~~~~~
+
+使用 Claude CLI 添加 ESP-IDF MCP 服务器。
+
+使用 ``eim`` （无需事先激活 ESP-IDF）：
 
 .. code-block:: bash
 
-  claude mcp add esp-idf python /path/to/esp-idf/tools/idf.py mcp-server --env IDF_PATH=/path/to/esp-idf
+  claude mcp add --transport stdio esp-idf-eim -- eim run "idf.py mcp-server"
+
+使用 ``idf.py`` （必须在已激活的 ESP-IDF 环境中执行）：
+
+.. code-block:: bash
+
+  claude mcp add --transport stdio esp-idf -- idf.py mcp-server
+
+前往 ESP-IDF 项目目录，并运行 ``claude`` 命令，与 AI 助手聊天。
+
 
 配置预设：``--preset``
 ========================
@@ -414,6 +500,16 @@ ESP-IDF 支持 `CMake presets`_ 以简化多个构建配置的管理。此功能
 
 - **参与构建的组件**：在项目根目录，或注册在项目 ``CMakeLists.txt`` 中的组件根目录，放置名为 ``idf_ext.py`` 的文件，该文件会在项目配置完成后得到识别。运行 ``idf.py build`` 或 ``idf.py reconfigure``，新添加的命令即可生效。
 - **Python 入口点**：对于任何已安装的 Python 包，在 ``idf_extension`` 组中定义入口点后，就可以提供扩展功能。只要安装了 Python 包就可以使用扩展功能，无需重新构建项目。
+
+出于安全考虑，组件扩展仅从可信来源加载：
+
+- ESP-IDF 内置组件（位于 ``IDF_PATH/components`` 下）。
+- 项目组件（项目自身的 ``components/`` 目录）。
+- 在项目顶层 ``CMakeLists.txt`` 中，由 ``EXTRA_COMPONENT_DIRS`` 所列目录中的用户自定义组件。
+- 乐鑫组件注册表 (``https://components.espressif.com/``) 中的乐鑫组件，仅 ``espressif/`` 命名空间受信任。
+- 下载到 ``IDF_TOOLS_PATH/root_managed_components/`` 目录下的 IDF 托管组件。仅 ``espressif/`` 命名空间受信任。
+
+其他来源的扩展（例如通过 ``git``、本地 ``path`` 或 ``override_path`` 解析的组件）会被跳过，并给出警告。若要加载所有组件中的扩展，请设置 ``IDF_EXTENSION_ALLOW_UNTRUSTED=1``。
 
 .. important::
 

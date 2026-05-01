@@ -12,7 +12,9 @@ The HTTP Server component provides an ability for running a lightweight web serv
     * :cpp:func:`httpd_stop`: This stops the server with the provided handle and frees up any associated memory/resources. This is a blocking function that first signals a halt to the server task and then waits for the task to terminate. While stopping, the task closes all open connections, removes registered URI handlers and resets all session context data to empty.
     * :cpp:func:`httpd_register_uri_handler`: A URI handler is registered by passing object of type ``httpd_uri_t`` structure which has members including ``uri`` name, ``method`` type (eg. ``HTTP_GET/HTTP_POST/HTTP_PUT`` etc.), function pointer of type ``esp_err_t *handler (httpd_req_t *req)`` and ``user_ctx`` pointer to user context data.
 
-.. note:: APIs in the HTTP server are not thread-safe. If thread safety is required, it is the responsibility of the application layer to ensure proper synchronization between multiple tasks.
+.. note::
+
+    APIs in the HTTP server are not thread-safe. If thread safety is required, it is the responsibility of the application layer to ensure proper synchronization between multiple tasks.
 
 Application Examples
 --------------------
@@ -20,6 +22,33 @@ Application Examples
 - :example:`protocols/http_server/simple` demonstrates how to handle arbitrary content lengths, read request headers and URL query parameters, and set response headers.
 
 - :example:`protocols/http_server/advanced_tests` demonstrates how to use the HTTP server for advanced testing.
+
+Interface Binding
+-----------------
+
+By default, the server listens on all available interfaces (``INADDR_ANY``). This is the behavior when ``httpd_config_t.if_name`` is ``NULL``.
+
+To bind the HTTP server to a specific network interface, set ``httpd_config_t.if_name`` to point to a ``struct ifreq`` with ``ifr_name`` populated (for example ``"eth0"``, ``"en0"``, or ``"lo"`` depending on platform).
+
+.. code-block:: c
+
+    #include <net/if.h>
+
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
+    struct ifreq ifr = {0};
+    strncpy(ifr.ifr_name, "eth0", sizeof(ifr.ifr_name) - 1);
+    ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
+
+    config.if_name = &ifr;
+    config.server_port = 80;
+
+    ESP_ERROR_CHECK(httpd_start(&server, &config));
+
+Notes:
+
+- ``if_name`` is only used during ``httpd_start()``. The ``ifreq`` object only needs to stay valid for the duration of that call.
 
 Persistent Connections
 ----------------------

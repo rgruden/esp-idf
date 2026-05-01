@@ -55,7 +55,9 @@ function(__init_kconfig)
     endforeach()
 
     idf_build_set_property(SDKCONFIG "${sdkconfig}")
+    idf_build_set_property(__SDKCONFIG_ORIG "${sdkconfig}")
     idf_build_set_property(SDKCONFIG_DEFAULTS "${sdkconfig_defaults_checked}")
+    idf_build_set_property(GENERATE_SDKCONFIG 1)
 
     # Setup ESP-IDF root Kconfig and sdkconfig.rename files.
     idf_build_set_property(__ROOT_KCONFIG "${idf_path}/Kconfig")
@@ -83,6 +85,16 @@ endfunction()
     and write the actual file.
 #]]
 function(__create_sdkconfig_orig_copy)
+    # The backup is only needed when the component manager is enabled.
+    # Managed components may introduce Kconfig options unknown to kconfgen
+    # during intermediate sdkconfig regeneration rounds. The backup preserves
+    # those options. When the manager is disabled, __SDKCONFIG_ORIG already
+    # points to the real sdkconfig (set in __init_kconfig).
+    idf_build_get_property(idf_component_manager IDF_COMPONENT_MANAGER)
+    if(NOT idf_component_manager EQUAL 1)
+        return()
+    endif()
+
     idf_build_get_property(sdkconfig SDKCONFIG)
     idf_build_get_property(build_dir BUILD_DIR)
     set(sdkconfig_orig "${build_dir}/sdkconfig.orig")
@@ -632,8 +644,12 @@ function(__generate_kconfig_outputs)
         --output header "${sdkconfig_header}"
         --output cmake "${sdkconfig_cmake}"
         --output json "${sdkconfig_json}"
-        --output config "${sdkconfig}"
     )
+
+    idf_build_get_property(generate_sdkconfig GENERATE_SDKCONFIG)
+    if(generate_sdkconfig)
+        list(APPEND kconfgen_outputs_cmd --output config "${sdkconfig}")
+    endif()
 
     idf_build_set_property(__KCONFGEN_OUTPUTS_CMD "${kconfgen_outputs_cmd}")
 
@@ -656,11 +672,17 @@ function(__generate_kconfig_outputs)
     set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" APPEND PROPERTY
                 ADDITIONAL_CLEAN_FILES "${sdkconfig_header}" "${sdkconfig_cmake}")
 
-    # Store output paths in build properties
+    # Store output paths in build properties (internal)
     idf_build_set_property(__SDKCONFIG_HEADER "${sdkconfig_header}")
     idf_build_set_property(__SDKCONFIG_CMAKE "${sdkconfig_cmake}")
     idf_build_set_property(__SDKCONFIG_JSON "${sdkconfig_json}")
     idf_build_set_property(__SDKCONFIG_JSON_MENUS "${sdkconfig_json_menus}")
+
+    # Public aliases for backward compatibility with components (e.g. ULP)
+    idf_build_set_property(SDKCONFIG_HEADER "${sdkconfig_header}")
+    idf_build_set_property(SDKCONFIG_CMAKE "${sdkconfig_cmake}")
+    idf_build_set_property(SDKCONFIG_JSON "${sdkconfig_json}")
+    idf_build_set_property(SDKCONFIG_JSON_MENUS "${sdkconfig_json_menus}")
 
     idf_msg("Generated Kconfig outputs in ${config_dir}")
 endfunction()
@@ -698,12 +720,8 @@ function(__create_base_kconfgen_command sdkconfig sdkconfig_defaults)
     endif()
 
     # Use __SDKCONFIG_ORIG for --config so that unknown options from managed
-    # components are preserved during intermediate kconfgen runs. Falls back
-    # to the real sdkconfig when __SDKCONFIG_ORIG is not yet set.
+    # components are preserved during intermediate kconfgen runs.
     idf_build_get_property(sdkconfig_orig __SDKCONFIG_ORIG)
-    if(NOT sdkconfig_orig)
-        set(sdkconfig_orig "${sdkconfig}")
-    endif()
 
     # Create base kconfgen command
     set(base_kconfgen_cmd ${python} -m kconfgen

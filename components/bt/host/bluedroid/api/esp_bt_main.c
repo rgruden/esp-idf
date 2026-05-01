@@ -92,6 +92,7 @@ esp_err_t esp_bluedroid_disable(void)
 
     if (btc_transfer_context(&msg, NULL, 0, NULL, NULL) != BT_STATUS_SUCCESS) {
         LOG_ERROR("Bluedroid disable failed\n");
+        future_free(*future_p);
         s_bt_host_state = ESP_BLUEDROID_STATUS_ENABLED;
         return ESP_FAIL;
     }
@@ -223,7 +224,9 @@ esp_err_t esp_bluedroid_init_with_cfg(esp_bluedroid_config_t *cfg)
     }
 
 #if (BT_HCI_LOG_INCLUDED == TRUE)
-    bt_hci_log_init();
+    if (bt_hci_log_init() != ESP_OK) {
+      LOG_WARN("HCI log facility unavailable, continuing without HCI log\n");
+    }
 #endif // (BT_HCI_LOG_INCLUDED == TRUE)
 
     s_bt_host_state = ESP_BLUEDROID_STATUS_INITIALIZED;
@@ -260,6 +263,7 @@ esp_err_t esp_bluedroid_deinit(void)
 
     if (btc_transfer_context(&msg, NULL, 0, NULL, NULL) != BT_STATUS_SUCCESS) {
         LOG_ERROR("Bluedroid de-initialise failed\n");
+        future_free(*future_p);
         return ESP_FAIL;
     }
 

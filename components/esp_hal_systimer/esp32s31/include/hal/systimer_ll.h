@@ -19,8 +19,6 @@ extern "C" {
 // All these functions get invoked either from ISR or HAL that linked to IRAM.
 // Always inline these functions even no gcc optimization is applied.
 
-// TODO: [ESP32S31] IDF-14693
-
 /******************* SYSTIMER LL CAPS *************************/
 #define SYSTIMER_LL_COUNTER_NUM             2  // Number of counter units
 #define SYSTIMER_LL_ALARM_NUM               3  // Number of alarm units
@@ -29,7 +27,6 @@ extern "C" {
 #define SYSTIMER_LL_INT_LEVEL               1  // Systimer peripheral uses level interrupt
 #define SYSTIMER_LL_ALARM_MISS_COMPENSATE   1  // Systimer peripheral can generate interrupt immediately if t(target) > t(current)
 #define SYSTIMER_LL_FIXED_DIVIDER           1  // Clock source divider is fixed: 2.5
-
 /******************* Clock *************************/
 
 __attribute__((always_inline)) static inline void systimer_ll_enable_clock(systimer_dev_t *dev, bool en)

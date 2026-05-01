@@ -195,11 +195,19 @@ config SOC_CLK_TREE_SUPPORTED
     bool
     default y
 
+config SOC_REGI2C_SUPPORTED
+    bool
+    default y
+
 config SOC_MPU_SUPPORTED
     bool
     default y
 
 config SOC_WDT_SUPPORTED
+    bool
+    default y
+
+config SOC_RTC_WDT_SUPPORTED
     bool
     default y
 
@@ -430,6 +438,14 @@ config SOC_GPIO_CLOCKOUT_CHANNEL_NUM
 config SOC_RTC_CNTL_NEEDS_ATOMIC_ACCESS
     bool
     default y
+
+config SOC_GPIO_SUPPORT_HP_PERIPH_PD_SLEEP_WAKEUP
+    bool
+    default y
+
+config SOC_GPIO_HP_PERIPH_PD_SLEEP_WAKEABLE_MASK
+    int
+    default 0
 
 config SOC_DEDIC_GPIO_HAS_INTERRUPT
     bool
@@ -688,6 +704,10 @@ config SOC_SPIRAM_XIP_SUPPORTED
     default y
 
 config SOC_USB_OTG_PERIPH_NUM
+    int
+    default 1
+
+config SOC_USB_FSLS_PHY_NUM
     int
     default 1
 

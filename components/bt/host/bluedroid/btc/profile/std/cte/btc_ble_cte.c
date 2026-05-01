@@ -26,7 +26,7 @@ static inline void btc_cte_ble_cb_to_app(esp_ble_cte_cb_event_t event, esp_ble_c
 static void btc_ble_cte_callback(tBTM_BLE_CTE_EVENT event,
                                                 tBTM_BLE_CTE_CB_PARAMS *params)
 {
-    esp_ble_cte_cb_param_t param;
+    esp_ble_cte_cb_param_t param = {0};
     bt_status_t ret;
     btc_msg_t msg;
     msg.sig = BTC_SIG_API_CB;
@@ -162,6 +162,8 @@ void btc_ble_cte_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
                 dst->cte_trans_params.switching_pattern_len = 0;
                 dst->cte_trans_params.antenna_ids = NULL;
             }
+        } else {
+            dst->cte_trans_params.antenna_ids = NULL;
         }
         break;
     case BTC_CTE_ACT_SET_IQ_SAMPLING_EN:
@@ -174,6 +176,8 @@ void btc_ble_cte_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
                 dst->cte_iq_sampling_en.antenna_ids = NULL;
                 BTC_TRACE_ERROR("%s %d no mem\n",__func__, msg->act);
             }
+        } else {
+            dst->cte_iq_sampling_en.antenna_ids = NULL;
         }
         break;
 #endif // #if (BLE_FEAT_CTE_CONNECTIONLESS_EN == TRUE)
@@ -189,6 +193,8 @@ void btc_ble_cte_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
                 dst->cte_recv_params.antenna_ids = NULL;
                 BTC_TRACE_ERROR("%s %d no mem\n",__func__, msg->act);
             }
+        } else {
+            dst->cte_recv_params.antenna_ids = NULL;
         }
         break;
     case BTC_CTE_ACT_SET_CONN_CTE_TRANS_PARAMS:
@@ -201,6 +207,8 @@ void btc_ble_cte_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
                 dst->cte_conn_trans_params.antenna_ids = NULL;
                 BTC_TRACE_ERROR("%s %d no mem\n",__func__, msg->act);
             }
+        } else {
+            dst->cte_conn_trans_params.antenna_ids = NULL;
         }
         break;
 #endif // #if (BLE_FEAT_CTE_CONNECTION_EN == TRUE)

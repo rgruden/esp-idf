@@ -109,11 +109,22 @@ menu "Bluetooth"
             This option is to configure the buffer size of the hci adv report cache in hci debug mode.
             This is a ring buffer, the new data will overwrite the oldest data if the buffer is full.
 
+    menu "BLE ISO Options"
+        depends on BT_ENABLED && SOC_BLE_ISO_SUPPORTED
+        source "$IDF_PATH/components/bt/esp_ble_audio/host/iso/Kconfig.iso.in"
+    endmenu
+
+    menu "BLE Audio Options"
+        depends on BT_ENABLED && SOC_BLE_AUDIO_SUPPORTED
+        source "$IDF_PATH/components/bt/esp_ble_audio/Kconfig.in"
+    endmenu
+
 endmenu
 
 menuconfig BLE_MESH
     bool "ESP BLE Mesh Support"
     depends on BT_ENABLED
+    depends on SOC_BLE_MESH_SUPPORTED
     help
         This option enables ESP BLE Mesh support. The specific features that are
         available may depend on other features that have been enabled in the

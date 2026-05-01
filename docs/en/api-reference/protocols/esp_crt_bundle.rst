@@ -12,7 +12,7 @@ The bundle comes with the complete list of root certificates from Mozilla's NSS 
 
 When generating the bundle you may choose between:
 
- * The full root certificate bundle from Mozilla, containing more than 130 certificates. The current bundle was updated Tue Dec  2 04:12:02 2025 GMT.
+ * The full root certificate bundle from Mozilla, containing more than 130 certificates. The current bundle was updated Wed Feb 11 18:26:30 2026 GMT.
  * A pre-selected filter list of the name of the most commonly used root certificates, reducing the amount of certificates to around 38 while still having around 93% absolute usage coverage and 99% market share coverage according to SSL certificate authorities statistics.
 
 In addition, it is possible to specify a path to a certificate file or a directory containing certificates which then will be added to the generated bundle.
@@ -63,7 +63,7 @@ Another alternative would be to download the finished list directly from the cur
 
 The common certificates bundle were made by selecting the authorities with a market share of more than 1% from w3tech's `SSL Survey <https://w3techs.com/technologies/overview/ssl_certificate>`_.
 
-These authorities were then used to pick the names of the certificates for the filter list, ``cmn_crt_authorities.csv``, from `this list <https://ccadb-public.secure.force.com/mozilla/IncludedCACertificateReportPEMCSV>`_ provided by Mozilla.
+These authorities were then used to pick the names of the certificates for the filter list, ``cmn_crt_authorities.csv``, from Mozilla's `Included CA Certificate List <https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootCertificateReportCSVFormat>`_.
 
 
 Updating the Certificate Bundle

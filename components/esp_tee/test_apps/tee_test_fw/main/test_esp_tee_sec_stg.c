@@ -329,13 +329,13 @@ TEST_CASE("Test TEE Secure Storage - Null Pointer and Zero Length", "[sec_storag
     };
 
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, sizeof(iv), NULL, sizeof(tag), data));
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, sizeof(iv), tag, 0, data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, sizeof(iv), tag, 0, data));
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_encrypt(&aead_ctx, NULL, sizeof(iv), tag, sizeof(tag), data));
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, 0, tag, sizeof(tag), data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, 0, tag, sizeof(tag), data));
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, sizeof(iv), NULL, sizeof(tag), data));
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, sizeof(iv), tag, 0, data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, sizeof(iv), tag, 0, data));
     TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_decrypt(&aead_ctx, NULL, sizeof(iv), tag, sizeof(tag), data));
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, 0, tag, sizeof(tag), data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, 0, tag, sizeof(tag), data));
 
     aead_ctx.input = NULL;
     aead_ctx.input_len = sizeof(data);
@@ -344,8 +344,8 @@ TEST_CASE("Test TEE Secure Storage - Null Pointer and Zero Length", "[sec_storag
 
     aead_ctx.input = data;
     aead_ctx.input_len = 0;
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, sizeof(iv), tag, sizeof(tag), data));
-    TEST_ESP_ERR(ESP_ERR_INVALID_SIZE, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, sizeof(iv), tag, sizeof(tag), data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_encrypt(&aead_ctx, iv, sizeof(iv), tag, sizeof(tag), data));
+    TEST_ESP_ERR(ESP_ERR_INVALID_ARG, esp_tee_sec_storage_aead_decrypt(&aead_ctx, iv, sizeof(iv), tag, sizeof(tag), data));
 
     TEST_ESP_OK(esp_tee_sec_storage_clear_key(key_id));
 
@@ -425,6 +425,10 @@ static void do_ecdsa_sign_and_verify(const esp_tee_sec_storage_key_cfg_t *cfg, c
     TEST_ESP_OK(verify_ecdsa_sign(cfg->type, digest, digest_len, &pubkey, &sign));
 }
 
+/* NOTE: In release mode (CONFIG_SECURE_TEE_SEC_STG_MODE_RELEASE), the test expects
+ * the eFuse-burned HMAC key used for TEE secure storage to be available at
+ * the path "test_keys/tee_sec_stg_hmac_key.bin"
+ */
 TEST_CASE("Test TEE Secure Storage - Host-generated keys", "[sec_storage_host_keygen]")
 {
     const char *aes_key_ids[] = { "aes256_key0", "aes256_key1" };

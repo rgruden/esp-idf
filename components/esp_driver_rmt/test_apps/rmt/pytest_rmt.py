@@ -14,7 +14,9 @@ from pytest_embedded_idf.utils import idf_parametrize
     ],
     indirect=True,
 )
-@idf_parametrize('target', ['esp32', 'esp32s2', 'esp32c3', 'esp32c6', 'esp32h2', 'esp32p4'], indirect=['target'])
+@idf_parametrize(
+    'target', ['esp32', 'esp32s2', 'esp32c3', 'esp32c6', 'esp32h2', 'esp32p4', 'esp32s31'], indirect=['target']
+)
 def test_rmt(dut: Dut) -> None:
     dut.run_all_single_board_cases()
 
@@ -57,7 +59,7 @@ def test_rmt_esp32c5(dut: Dut) -> None:
 
 
 @pytest.mark.generic
-@pytest.mark.esp32c5_eco3
+@pytest.mark.esp32c5_rev1
 @pytest.mark.parametrize(
     'config',
     [
@@ -66,7 +68,7 @@ def test_rmt_esp32c5(dut: Dut) -> None:
     indirect=True,
 )
 @idf_parametrize('target', ['esp32c5'], indirect=['target'])
-def test_rmt_esp32c5_eco3(dut: Dut) -> None:
+def test_rmt_esp32c5_rev1(dut: Dut) -> None:
     dut.run_all_single_board_cases()
 
 

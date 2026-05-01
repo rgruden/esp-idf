@@ -24,6 +24,7 @@ typedef struct gdma_channel_t *gdma_channel_handle_t;
  * @brief Collection of configuration items that used for allocating GDMA channel
  */
 typedef struct {
+    int intr_priority;           /*!< DMA interrupt priority, if set to 0, the driver will try to allocate an interrupt with a relative low priority (1,2,3) */
     struct {
         int isr_cache_safe: 1;  /*!< If set, DMA channel allocator would allocate interrupt in cache-safe region, and ISR is serviceable when cache is disabled */
     } flags;
@@ -72,6 +73,9 @@ typedef struct {
     gdma_event_callback_t on_recv_eof;  /*!< Invoked when RX engine meets EOF descriptor */
     gdma_event_callback_t on_descr_err; /*!< Invoked when DMA encounters a descriptor error */
     gdma_event_callback_t on_recv_done; /*!< Invoked when finished to receive one RX descriptor */
+    gdma_event_callback_t on_descr_empty; /*!< Invoked when RX has no more descriptor space for incoming data.
+                                              This event is abnormal and non-recoverable for the current transfer;
+                                              software should fix descriptor/buffer sizing and restart DMA. */
 } gdma_rx_event_callbacks_t;
 
 /**

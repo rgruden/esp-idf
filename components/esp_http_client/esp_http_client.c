@@ -1655,15 +1655,9 @@ static esp_err_t esp_http_client_connect(esp_http_client_handle_t client)
         esp_http_client_close(client);
         return err;
     }
-    client->state = HTTP_STATE_CONNECTING;
-
     if (client->state < HTTP_STATE_CONNECTED) {
-#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_CUSTOM_TRANSPORT
-        // If the custom transport is enabled and defined, we skip the selection of appropriate transport from the list
-        // based on the scheme, since we already have the transport
-        if (!client->transport)
-#endif
-        {
+        /* Select transport only if not already set (e.g., async retry or custom transport) */
+        if (!client->transport) {
             ESP_LOGD(TAG, "Begin connect to: %s://%s:%d", client->connection_info.scheme, client->connection_info.host, client->connection_info.port);
             client->transport = esp_transport_list_get_transport(client->transport_list, client->connection_info.scheme);
         }
@@ -1688,6 +1682,7 @@ static esp_err_t esp_http_client_connect(esp_http_client_handle_t client)
                 return ESP_ERR_HTTP_CONNECT;
             }
         } else {
+            client->state = HTTP_STATE_CONNECTING;
             int ret = esp_transport_connect_async(client->transport, client->connection_info.host, client->connection_info.port, client->timeout_ms);
             if (ret == ASYNC_TRANS_CONNECT_FAIL) {
                 ESP_LOGE(TAG, "Connection failed");
@@ -1721,6 +1716,7 @@ static int http_client_prepare_first_line(esp_http_client_handle_t client, int w
         const bool length_required = (client->connection_info.method != HTTP_METHOD_GET &&
                                       client->connection_info.method != HTTP_METHOD_HEAD &&
                                       client->connection_info.method != HTTP_METHOD_DELETE);
+        http_header_delete(client->request->headers, "Transfer-Encoding");
         if (write_len != 0 || length_required) {
             http_header_set_format(client->request->headers, "Content-Length", "%d", write_len);
         } else {
@@ -1728,6 +1724,12 @@ static int http_client_prepare_first_line(esp_http_client_handle_t client, int w
         }
     } else {
         esp_http_client_set_header(client, "Transfer-Encoding", "chunked");
+        /*
+         * RFC 9112, §6.2 (https://datatracker.ietf.org/doc/html/rfc9112#section-6.2-2)
+         * RFC 7230, §3.3.2 (https://www.rfc-editor.org/rfc/rfc7230.html#section-3.3.2)
+         * A sender MUST NOT send a Content-Length header field in any message that contains a Transfer-Encoding header field.
+         */
+        http_header_delete(client->request->headers, "Content-Length");
     }
 
     const char *method = HTTP_METHOD_MAPPING[client->connection_info.method];
@@ -1879,8 +1881,8 @@ esp_err_t esp_http_client_open(esp_http_client_handle_t client, int write_len)
 
 int esp_http_client_write(esp_http_client_handle_t client, const char *buffer, int len)
 {
-    if (client->state < HTTP_STATE_REQ_COMPLETE_HEADER) {
-        return ESP_FAIL;
+    if (client == NULL || len < 0 || client->state < HTTP_STATE_REQ_COMPLETE_HEADER || (buffer == NULL && len > 0)) {
+        return -1;
     }
 
     int wlen = 0, widx = 0;
@@ -1895,6 +1897,46 @@ int esp_http_client_write(esp_http_client_handle_t client, const char *buffer, i
         len -= wlen;
     }
     return widx;
+}
+
+int esp_http_client_chunk_write_begin(esp_http_client_handle_t client, const int len)
+{
+    if (client == NULL || client->state < HTTP_STATE_REQ_COMPLETE_HEADER || len <= 0) {
+        return -1;
+    }
+
+    char header_buffer[16];
+    int header_len = snprintf(header_buffer, sizeof(header_buffer), "%x\r\n", len);
+    int wlen = esp_transport_write(client->transport, header_buffer, header_len, client->timeout_ms);
+
+    if (wlen < 0 || wlen != header_len) {
+        return -1;
+    }
+    return 0;
+}
+
+int esp_http_client_chunk_write_end(esp_http_client_handle_t client, bool last_chunk)
+{
+    if (client == NULL || client->state < HTTP_STATE_REQ_COMPLETE_HEADER) {
+        return -1;
+    }
+
+    /* Send chunk trailer: \r\n */
+    int wlen = esp_transport_write(client->transport, "\r\n", 2, client->timeout_ms);
+    if (wlen < 0 || wlen != 2) {
+        return -1;
+    }
+
+    if (last_chunk) {
+        /* Send final terminator: 0\r\n\r\n */
+        const char *terminator = "0\r\n\r\n";
+        wlen = esp_transport_write(client->transport, terminator, strlen(terminator), client->timeout_ms);
+        if (wlen < 0 || wlen != strlen(terminator)) {
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 esp_err_t esp_http_client_close(esp_http_client_handle_t client)

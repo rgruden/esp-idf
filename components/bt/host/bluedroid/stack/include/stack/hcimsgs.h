@@ -509,6 +509,11 @@ BOOLEAN btsnd_hcic_read_inq_tx_power (void);
 
 #define HCIC_PARAM_SIZE_R_TX_POWER      0
 
+/* Write Inquiry Tx Power Level */
+BOOLEAN btsnd_hcic_write_inq_tx_power (INT8 tx_power);
+
+#define HCIC_PARAM_SIZE_W_INQ_TX_POWER  1
+
 /* Read Default Erroneous Data Reporting */
 BOOLEAN btsnd_hcic_read_default_erroneous_data_rpt (void);
 
@@ -794,7 +799,9 @@ void btsnd_hcic_vendor_spec_cmd (BT_HDR *buffer, UINT16 opcode,
 #define HCIC_PARAM_SIZE_READ_TRANS_POWER               0
 #define HCIC_PARAM_SIZE_READ_RF_PATH_COMPENSATION      0
 #define HCIC_PARAM_SIZE_WRITE_RF_PATH_COMPENSATION     4
+#endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
 
+#if ((BLE_50_FEATURE_SUPPORT == TRUE) || (BLE_42_FEATURE_SUPPORT == TRUE))
 BlE_SYNC *btsnd_hcic_ble_get_sync_info(void);
 void btsnd_hcic_ble_sync_sem_init(void);
 void btsnd_hcic_ble_sync_sem_deinit(void);
@@ -802,7 +809,21 @@ void btsnd_hcic_ble_sync_sem_deinit(void);
 uint8_t btsnd_hcic_ble_get_status(void);
 
 void btsnd_hci_ble_set_status(UINT8 hci_status);
-#endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+#endif // ((BLE_50_FEATURE_SUPPORT == TRUE) || (BLE_42_FEATURE_SUPPORT == TRUE))
+
+#if (BLE_FEAT_ADV_MONITOR == TRUE)
+#define HCIC_PARAM_SIZE_ADD_MONITOR_ADV_LIST           10
+#define HCIC_PARAM_SIZE_RMV_MONITOR_ADV_LIST           7
+#define HCIC_PARAM_SIZE_CLEAR_MONITOR_ADV_LIST         0
+#define HCIC_PARAM_SIZE_READ_MONITOR_ADV_LIST_SIZE     0
+#define HCIC_PARAM_SIZE_ENABLE_MONITOR_ADV             1
+
+UINT8 btsnd_hcic_ble_add_monitor_adv_list(UINT8 addr_type, BD_ADDR addr, INT8 rssi_low, INT8 rssi_high, UINT8 timeout);
+UINT8 btsnd_hcic_ble_rmv_monitor_adv_list(UINT8 addr_type, BD_ADDR addr);
+UINT8 btsnd_hcic_ble_clear_monitor_adv_list(void);
+BOOLEAN btsnd_hcic_ble_read_monitor_adv_list_size(void);
+UINT8 btsnd_hcic_ble_enable_monitor_adv(UINT8 enable);
+#endif // #if (BLE_FEAT_ADV_MONITOR == TRUE)
 
 /* ULP HCI command */
 BOOLEAN btsnd_hcic_ble_set_evt_mask (BT_EVENT_MASK event_mask);
@@ -815,25 +836,24 @@ BOOLEAN btsnd_hcic_ble_set_local_used_feat (UINT8 feat_set[8]);
 
 BOOLEAN btsnd_hcic_ble_set_random_addr (BD_ADDR random_addr);
 
-BOOLEAN btsnd_hcic_ble_write_adv_params (UINT16 adv_int_min, UINT16 adv_int_max,
+UINT8 btsnd_hcic_ble_write_adv_params (UINT16 adv_int_min, UINT16 adv_int_max,
         UINT8 adv_type, UINT8 addr_type_own,
         UINT8 addr_type_dir, BD_ADDR direct_bda,
         UINT8 channel_map, UINT8 adv_filter_policy);
 
 BOOLEAN btsnd_hcic_ble_read_adv_chnl_tx_power (void);
 
-BOOLEAN btsnd_hcic_ble_set_adv_data (UINT8 data_len, UINT8 *p_data);
+UINT8 btsnd_hcic_ble_set_adv_data (UINT8 data_len, UINT8 *p_data);
 
-BOOLEAN btsnd_hcic_ble_set_scan_rsp_data (UINT8 data_len, UINT8 *p_scan_rsp);
+UINT8 btsnd_hcic_ble_set_scan_rsp_data (UINT8 data_len, UINT8 *p_scan_rsp);
 
-BOOLEAN btsnd_hcic_ble_set_adv_enable (UINT8 adv_enable);
+UINT8 btsnd_hcic_ble_set_adv_enable (UINT8 adv_enable);
 
-BOOLEAN btsnd_hcic_ble_set_scan_params (UINT8 scan_type,
+UINT8 btsnd_hcic_ble_set_scan_params (UINT8 scan_type,
                                         UINT16 scan_int, UINT16 scan_win,
                                         UINT8 addr_type, UINT8 scan_filter_policy);
 
-BOOLEAN btsnd_hcic_ble_set_scan_enable (UINT8 scan_enable, UINT8 duplicate);
-
+UINT8 btsnd_hcic_ble_set_scan_enable (UINT8 scan_enable, UINT8 duplicate);
 BOOLEAN btsnd_hcic_ble_create_ll_conn (UINT16 scan_int, UINT16 scan_win,
                                        UINT8 init_filter_policy, UINT8 addr_type_peer, BD_ADDR bda_peer, UINT8 addr_type_own,
                                        UINT16 conn_int_min, UINT16 conn_int_max, UINT16 conn_latency, UINT16 conn_timeout,

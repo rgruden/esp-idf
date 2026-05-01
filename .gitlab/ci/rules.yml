@@ -71,6 +71,7 @@
   - "tools/ci/check_esp_memory_utils_headers.sh"
   - "tools/ci/check_blobs.sh"
   - "tools/ci/check_public_headers.py"
+  - "tools/ci/check_public_headers_exceptions.txt"
   - "tools/ci/check_register_rw_half_word.cmake"
   - "tools/ci/check_register_rw_half_word.py"
   - "components/esp_wifi/remote/scripts/generate_and_check.py"
@@ -86,6 +87,7 @@
   - "tools/idf_tools.py"
   - "tools/test_idf_tools/**/*"
   - "tools/install_util.py"
+  - "tools/idf_extra_components.yml"
 
   - "tools/export_utils/utils.py"
   - "tools/export_utils/shell_types.py"
@@ -165,7 +167,10 @@
   - "components/heap/tlsf"
   - "components/bt/controller/lib_esp32c6/esp32c6-bt-lib"
   - "components/bt/controller/lib_esp32c5/esp32c5-bt-lib"
+  - "components/bt/controller/lib_esp32h4/esp32h4-bt-lib"
+  - "components/bt/controller/lib_esp32s31/esp32s31-bt-lib"
   - "components/bt/esp_ble_mesh/lib/lib"
+  - "components/bt/esp_ble_audio/lib/lib"
   - ".gitmodules"
 
 ##############

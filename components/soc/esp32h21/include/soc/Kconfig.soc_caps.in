@@ -3,11 +3,19 @@
 # using gen_soc_caps_kconfig.py, do not edit manually
 #####################################################
 
+config SOC_ANA_CMPR_SUPPORTED
+    bool
+    default y
+
 config SOC_DEDICATED_GPIO_SUPPORTED
     bool
     default y
 
 config SOC_UART_SUPPORTED
+    bool
+    default y
+
+config SOC_UHCI_SUPPORTED
     bool
     default y
 
@@ -107,6 +115,10 @@ config SOC_SECURE_BOOT_SUPPORTED
     bool
     default y
 
+config SOC_BOD_SUPPORTED
+    bool
+    default y
+
 config SOC_PMU_SUPPORTED
     bool
     default y
@@ -131,6 +143,10 @@ config SOC_WDT_SUPPORTED
     bool
     default y
 
+config SOC_RTC_WDT_SUPPORTED
+    bool
+    default y
+
 config SOC_SPI_FLASH_SUPPORTED
     bool
     default y
@@ -139,7 +155,7 @@ config SOC_MODEM_CLOCK_SUPPORTED
     bool
     default y
 
-config SOC_REG_I2C_SUPPORTED
+config SOC_REGI2C_SUPPORTED
     bool
     default y
 
@@ -156,6 +172,14 @@ config SOC_TWAI_SUPPORTED
     default y
 
 config SOC_ETM_SUPPORTED
+    bool
+    default y
+
+config SOC_PARLIO_SUPPORTED
+    bool
+    default y
+
+config SOC_PARLIO_LCD_SUPPORTED
     bool
     default y
 
@@ -339,10 +363,6 @@ config SOC_MMU_PAGE_SIZE_CONFIGURABLE
     bool
     default y
 
-config SOC_MMU_PAGE_SIZE_8KB_SUPPORTED
-    bool
-    default y
-
 config SOC_MMU_PERIPH_NUM
     int
     default 1
@@ -440,14 +460,6 @@ config SOC_RTCIO_PIN_COUNT
     default 7
 
 config SOC_RTCIO_HOLD_SUPPORTED
-    bool
-    default y
-
-config SOC_ANA_CMPR_NUM
-    int
-    default 1
-
-config SOC_ANA_CMPR_INTR_SHARE_WITH_GPIO
     bool
     default y
 
@@ -600,6 +612,30 @@ config SOC_MCPWM_CAPTURE_CLK_FROM_GROUP
     default y
 
 config SOC_MCPWM_SUPPORT_SLEEP_RETENTION
+    bool
+    default y
+
+config SOC_PARLIO_TX_UNIT_MAX_DATA_WIDTH
+    int
+    default 8
+
+config SOC_PARLIO_RX_UNIT_MAX_DATA_WIDTH
+    int
+    default 8
+
+config SOC_PARLIO_TX_CLK_SUPPORT_GATING
+    bool
+    default y
+
+config SOC_PARLIO_RX_CLK_SUPPORT_GATING
+    bool
+    default y
+
+config SOC_PARLIO_TX_SUPPORT_LOOP_TRANSMISSION
+    bool
+    default y
+
+config SOC_PARLIO_SUPPORT_SLEEP_RETENTION
     bool
     default y
 
@@ -952,6 +988,10 @@ config SOC_PM_CPU_RETENTION_BY_SW
     default y
 
 config SOC_PM_MODEM_RETENTION_BY_REGDMA
+    bool
+    default y
+
+config SOC_PM_MODEM_CLK_CONF_RETENTION
     bool
     default y
 

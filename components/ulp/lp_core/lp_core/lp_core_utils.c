@@ -24,18 +24,10 @@
 #endif
 
 #include "esp_cpu.h"
-
-/* LP_FAST_CLK is not very accurate, for now use a rough estimate */
-#if CONFIG_RTC_FAST_CLK_SRC_RC_FAST
-#define LP_CORE_CPU_FREQUENCY_HZ 16000000 // For P4 TRM says 20 MHz by default, but we tune it closer to 16 MHz
-#elif CONFIG_RTC_FAST_CLK_SRC_XTAL
-#if SOC_XTAL_SUPPORT_48M
-#define LP_CORE_CPU_FREQUENCY_HZ 48000000
-#else
-#define LP_CORE_CPU_FREQUENCY_HZ 40000000
-#endif
-#else  // Default value in chip without rtc fast clock sel option
-#define LP_CORE_CPU_FREQUENCY_HZ 16000000
+#include "ulp_lp_core_cpu_freq_shared.h"
+#if SOC_LP_CORE_HW_AUTO_CLRWAKEUPCAUSE
+#include "hal/lp_aon_hal.h"
+#include "rom/rtc.h"
 #endif
 
 static uint32_t lp_wakeup_cause = 0;
@@ -117,11 +109,14 @@ void ulp_lp_core_wakeup_main_processor(void)
  */
 void ulp_lp_core_delay_us(uint32_t us)
 {
-    uint32_t start = RV_READ_CSR(mcycle);
-    uint32_t end = us * (LP_CORE_CPU_FREQUENCY_HZ / 1000000);
+    if (us == 0) {
+        return;
+    }
+    uint32_t start = RV_READ_CSR(mcycle) - ULP_LP_CORE_DELAY_CALL_OVERHEAD_IN_CYCLES;
+    uint32_t req_delay = us * LP_CORE_CYCLES_PER_US_NUM / LP_CORE_CYCLES_PER_US_DENOM;
 
-    while ((RV_READ_CSR(mcycle) - start) < end) {
-        /* nothing to do */
+    while ((uint32_t)(RV_READ_CSR(mcycle) - start) < req_delay) {
+        /* busy wait */
     }
 }
 
@@ -132,11 +127,13 @@ void ulp_lp_core_delay_us(uint32_t us)
  */
 void ulp_lp_core_delay_cycles(uint32_t cycles)
 {
-    uint32_t start = RV_READ_CSR(mcycle);
-    uint32_t end = cycles;
+    if (cycles <= ULP_LP_CORE_DELAY_CALL_OVERHEAD_IN_CYCLES) {
+        return;
+    }
 
-    while ((RV_READ_CSR(mcycle) - start) < end) {
-        /* nothing to do */
+    uint32_t start = RV_READ_CSR(mcycle) - ULP_LP_CORE_DELAY_CALL_OVERHEAD_IN_CYCLES;
+    while ((uint32_t)(RV_READ_CSR(mcycle) - start) < cycles) {
+        /* busy wait */
     }
 }
 
@@ -149,9 +146,22 @@ void ulp_lp_core_lp_uart_reset_wakeup_en(void)
 }
 #endif
 
+void ulp_lp_core_sleep_start_lp_core(void)
+{
+#if SOC_LP_CORE_HW_AUTO_CLRWAKEUPCAUSE
+    /* LP store register to save wakeup cause for HP core to query.
+     * Using a hardware register avoids symbol linking issues between
+     * the independently compiled HP and LP core binaries.
+     * Save PMU wakeup cause to LP store register for HP core to query */
+    lp_aon_hal_store_wakeup_cause(pmu_ll_hp_get_wakeup_cause(&PMU));
+#endif
+
+    lp_core_ll_request_sleep();
+}
+
 void ulp_lp_core_halt(void)
 {
-    lp_core_ll_request_sleep();
+    ulp_lp_core_sleep_start_lp_core();
 
     while (1);
 }
@@ -160,7 +170,7 @@ void ulp_lp_core_stop_lp_core(void)
 {
     /* Disable wake-up source and put lp core to sleep */
     lp_core_ll_set_wakeup_source(0);
-    lp_core_ll_request_sleep();
+    ulp_lp_core_sleep_start_lp_core();
 }
 
 void __attribute__((noreturn)) abort(void)

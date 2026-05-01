@@ -459,7 +459,8 @@ menu "Wi-Fi"
         config ESP_WIFI_SLP_BEACON_LOST_TIMEOUT
             int "Beacon loss timeout"
             range 5 100
-            default 10
+            default 25 if ESP_COEX_SW_COEXIST_ENABLE
+            default 10 if (!ESP_COEX_SW_COEXIST_ENABLE)
             depends on ESP_WIFI_SLP_BEACON_LOST_OPT
             help
                 Timeout time for close rf phy when beacon loss occurs, Unit: 1024 microsecond.
@@ -880,6 +881,13 @@ menu "Wi-Fi"
                 Enable debug assertions to verify modem RF flag update operations.
                 This option enables assert checks to verify that modem RF power state
                 is correctly cleared before pmu sleep.
+
+        config ESP_WIFI_PASSIVE_HIDDEN_AP_SUPPORT
+            bool "Support station connection to hidden APs using passive scan when country policy is auto"
+            default n
+            help
+                Select this option to enable/disable support for station connections
+                to hidden APs using passive scan when the country policy is set to auto.
 
     endif # wifi enabled
 

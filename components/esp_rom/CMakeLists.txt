@@ -24,26 +24,6 @@ else()
                         "patches/esp_rom_efuse.c"
                         "patches/esp_rom_gpio.c")
 
-
-    # Override regi2c implementation in ROM
-    if(CONFIG_ESP_ROM_HAS_REGI2C_BUG OR CONFIG_ESP_ROM_WITHOUT_REGI2C)
-        if(target STREQUAL "esp32c6" OR target STREQUAL "esp32c5")
-            list(APPEND sources "patches/esp_rom_hp_regi2c_${target}.c")
-        else()
-            list(APPEND sources "patches/esp_rom_regi2c_${target}.c")
-        endif()
-    endif()
-
-    if(CONFIG_HEAP_TLSF_USE_ROM_IMPL AND CONFIG_ESP_ROM_TLSF_CHECK_PATCH)
-        # This file shall be included in the build if TLSF in ROM is activated
-        list(APPEND sources "patches/esp_rom_tlsf.c")
-    endif()
-
-    if(CONFIG_HEAP_TLSF_USE_ROM_IMPL AND CONFIG_ESP_ROM_MULTI_HEAP_WALK_PATCH)
-        # This file shall be included in the build if TLSF in ROM is activated
-        list(APPEND sources "patches/esp_rom_multi_heap.c")
-    endif()
-
     list(APPEND private_required_comp soc hal esp_hal_uart)
 endif()
 
@@ -127,7 +107,6 @@ if(CONFIG_ESP_ROM_HAS_VERSION)
 endif()
 
 if(ESP_TEE_BUILD)
-    rom_linker_script("heap")
     if(CONFIG_LIBC_NEWLIB AND CONFIG_ESP_ROM_HAS_NEWLIB_NANO_FORMAT)
         rom_linker_script("newlib-nano")
     endif()
@@ -314,6 +293,13 @@ else() # Regular app build
         if(CONFIG_ESP32C61_REV_MIN_FULL GREATER_EQUAL 101)
             rom_linker_script("eco4")
         endif()
+    elseif(target STREQUAL "esp32s31")
+        # esp32s31.rom.api.ld has been split to several lds by components.
+        # esp32s31.rom.api.ld is still reserved to map the APIs
+        rom_linker_script("phy")
+        rom_linker_script("coexist")
+        rom_linker_script("net80211")
+        rom_linker_script("pp")
     endif()
 
 
@@ -346,22 +332,6 @@ else() # Regular app build
         if(CONFIG_ESP_ROM_HAS_NEWLIB_NORMAL_FORMAT AND CONFIG_LIBC_NEWLIB AND NOT CONFIG_LIBC_NEWLIB_NANO_FORMAT)
             rom_linker_script("newlib-normal")
         endif()
-    endif()
-
-    if(CONFIG_HEAP_TLSF_USE_ROM_IMPL)
-        # After registering the component, set the tlsf_set_rom_patches symbol as undefined
-        # to force the linker to integrate the whole `esp_rom_tlsf.c` object file inside the
-        # final binary. This is necessary because tlsf_set_rom_patches is a constructor, thus,
-        # there as no explicit reference/call to it in IDF.
-        if((CONFIG_ESP_ROM_TLSF_CHECK_PATCH OR CONFIG_HEAP_TLSF_CHECK_PATCH))
-            target_link_libraries(${COMPONENT_LIB} PRIVATE "-u tlsf_set_rom_patches")
-        endif()
-
-        if((CONFIG_ESP_ROM_TLSF_CHECK_PATCH OR CONFIG_ESP_ROM_MULTI_HEAP_WALK_PATCH))
-            target_link_libraries(${COMPONENT_LIB} PRIVATE "-u esp_rom_include_multi_heap_patch")
-        endif()
-
-        rom_linker_script("heap")
     endif()
 
     if(CONFIG_SPI_FLASH_ROM_IMPL)

@@ -2,6 +2,7 @@
 # Default Variables #
 #####################
 stages:
+  - manual_gate
   - upload_cache
   - pre_check
   - build
@@ -10,6 +11,7 @@ stages:
   - target_test
   - host_test
   - test_deploy
+  - pre_deploy
   - deploy
   - post_deploy
 
@@ -18,6 +20,10 @@ variables:
 
   # Common parameters for the 'make' during CI tests
   MAKEFLAGS: "-j5 --no-keep-going"
+  # By default, CI build jobs request and limit 4 CPU cores and 4 GB of memory
+  # https://github.com/ninja-build/ninja/blob/def9560a0b6d755936e615ce443a0aec45c39bdb/src/ninja.cc#L262
+  # cpu_cores + 2
+  IDF_PY_BUILD_JOBS: "6"
 
 # GitLab-CI environment
   # Thanks to pack-objects cache, clone strategy should behave faster than fetch
@@ -86,6 +92,7 @@ variables:
 
   IDF_CI_BUILD: 1
 
+  PYTHONWARNINGS: "ignore"
   # ccache settings
   # some settings need to set in .gitlab-ci.yml as it takes effect while start-up the job
   # https://ccache.dev/manual/latest.html#_configuring_ccache
@@ -117,6 +124,11 @@ variables:
   # configure cmake related flags
   source tools/ci/configure_ci_environment.sh
 
+  if [[ "$CI_CCACHE_STATS" == 1 ]] && command -v ccache >/dev/null 2>&1 && [[ -n "$CCACHE_STATSLOG" ]]; then
+    mkdir -p "$(dirname "$CCACHE_STATSLOG")"
+    rm -f "$CCACHE_STATSLOG"
+  fi
+
   # add extra python packages
   export PYTHONPATH="$IDF_PATH/tools:$IDF_PATH/tools/ci:$IDF_PATH/tools/esp_app_trace:$IDF_PATH/components/partition_table:$IDF_PATH/tools/ci/python_packages:$PYTHONPATH"
 
@@ -146,7 +158,7 @@ variables:
   # install.sh
   if [[ "${CI_JOB_STAGE}" != "target_test" ]]; then
     section_start "running_install_sh" "Running install.sh"
-    if [[ "${CI_JOB_STAGE}" == "build_doc" ]]; then
+    if [[ "${CI_JOB_STAGE}" == "build_doc" || "${CI_JOB_GROUP_NAME}" == *docs* ]]; then
       run_cmd bash install.sh --enable-ci --enable-docs
     else
       run_cmd bash install.sh --enable-ci
@@ -229,7 +241,17 @@ variables:
 .show_ccache_statistics: &show_ccache_statistics |
   # Show ccache statistics if enabled globally
   section_start "ccache_show_stats" "Show ccache statistics"
-  test "$CI_CCACHE_STATS" == 1 && test -n "$(which ccache)" && ccache --show-stats -vv || true
+  if [[ "$CI_CCACHE_STATS" == 1 ]] && command -v ccache >/dev/null 2>&1; then
+    if ccache --help 2>/dev/null | grep -q -- '--show-log-stats'; then
+      if [[ -n "$CCACHE_STATSLOG" && -f "$CCACHE_STATSLOG" ]]; then
+        ccache --show-log-stats -vv
+      else
+        echo "INFO: No per-job ccache statistics were recorded"
+      fi
+    else
+      ccache --show-stats -vv
+    fi
+  fi || true
   section_end "ccache_show_stats"
 
 .upload_failed_job_log_artifacts: &upload_failed_job_log_artifacts |
@@ -244,6 +266,7 @@ variables:
 .after_script:build:
   after_script:
     - source tools/ci/utils.sh
+    - source tools/ci/configure_ci_environment.sh
     - *show_ccache_statistics
     - *upload_failed_job_log_artifacts
 
@@ -257,6 +280,31 @@ variables:
   image: macos-sequoia-idf-v6.1
   after_script: []  # ccache now is disabled for macos brew runners
   timeout: 30m
+
+.brew-windows-settings:
+  image: windows_11_idf_v6_1
+  tags: [windows-vm, brew]
+  variables:
+    GIT_STRATEGY: fetch
+    LC_ALL: C.UTF-8
+    # git clean at the final cleanup stage stuck on Windows VM
+    # a new VM for each job anyway, so we can skip cleaning the workspace
+    GIT_CLEAN_FLAGS: none
+#    IDF_CCACHE_ENABLE: "1"
+#    CCACHE_DIR: "C:/cache/idf_ccache"
+  before_script:
+    - if ($env:IDF_DONT_USE_MIRRORS) { $env:IDF_MIRROR_PREFIX_MAP = '' }
+    - ./install.ps1 --enable-ci
+    - ./export.ps1
+    - $env:PYTHONPATH = "$env:PYTHONPATH;$env:IDF_PATH\tools;$env:IDF_PATH\tools\esp_app_trace;$env:IDF_PATH\components\partition_table;$env:IDF_PATH\tools\ci\python_packages"
+    - python "${SUBMODULE_FETCH_TOOL}" -s "${SUBMODULES_TO_FETCH}"
+    # The time in VM may not be synced, since it's built a long time ago, so we need to sync time
+    - net start w32time
+    - w32tm /config /manualpeerlist:"time.google.com,0x9 pool.ntp.org,0x9" /syncfromflags:manual /reliable:yes /update
+    - net stop w32time
+    - net start w32time
+    - w32tm /resync
+  after_script: []
 
 #############
 # `default` #

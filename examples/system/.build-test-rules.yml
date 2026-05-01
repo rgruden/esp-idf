@@ -4,7 +4,7 @@ examples/system/app_trace_basic:
   disable_test:
     - if: IDF_TARGET == "esp32h21"
       temporary: true
-      reason: not supported yet #TODO: OCD-1081
+      reason: lack of runners
     - if: IDF_TARGET == "esp32h4"
       temporary: true
       reason: not supported yet #TODO: OCD-1137
@@ -45,7 +45,7 @@ examples/system/efuse:
       reason: Secure Boot V2 with ECDSA P384 is not supported.
     - if: IDF_TARGET in ["esp32s31"]
       temporary: true
-      reason: not support yet # TODO: [ESP32S31] IDF-14688
+      reason: not support yet # TODO: [ESP32S31] IDF-14442
   depends_components:
     - *common_components
     - efuse
@@ -81,7 +81,7 @@ examples/system/gcov:
   disable_test:
     - if: IDF_TARGET == "esp32h21"
       temporary: true
-      reason: not supported yet #TODO: OCD-1079
+      reason: lack of runners
     - if: IDF_TARGET == "esp32h4"
       temporary: true
       reason: not supported yet #TODO: OCD-1138
@@ -268,7 +268,7 @@ examples/system/sysview_tracing:
   disable_test:
     - if: IDF_TARGET == "esp32h21"
       temporary: true
-      reason: not supported yet #TODO: OCD-1082
+      reason: lack of runners
     - if: IDF_TARGET == "esp32h4"
       temporary: true
       reason: not supported yet #TODO: OCD-1136
@@ -285,16 +285,13 @@ examples/system/sysview_tracing_heap_log:
   disable_test:
     - if: IDF_TARGET == "esp32h21"
       temporary: true
-      reason: not supported yet #TODO: OCD-1082
+      reason: lack of runners
     - if: IDF_TARGET == "esp32h4"
       temporary: true
       reason: not supported yet #TODO: OCD-1136
     - if: IDF_TARGET == "esp32s31"
       temporary: true
       reason: not support yet   #TODO: OCD-1289
-    - if: IDF_TARGET == "esp32p4"
-      temporary: true
-      reason: lack of eco6 runners
   depends_components:
     - esp_trace
     - app_trace

@@ -77,22 +77,22 @@ function(__parse_and_store_version_arg)
     cmake_parse_arguments(PROJECT "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     # If the VERSION keyword exists but no version string is provided then raise a warning
-    if((NOT PROJECT_VERSION
-        OR PROJECT_VERSION STREQUAL "NOTFOUND")
-        AND NOT PROJECT_VERSION STREQUAL "0")
+    if(("${PROJECT_VERSION}" STREQUAL ""
+        OR "${PROJECT_VERSION}" STREQUAL "NOTFOUND")
+        AND NOT "${PROJECT_VERSION}" STREQUAL "0")
         message(STATUS "VERSION keyword not followed by a value or was followed by a value that expanded to nothing.")
         # Default the version to 1 in this case
         set(project_ver 1)
     else()
         # Check if version is valid. cmake allows the version to be in the format <major>[.<minor>[.<patch>[.<tweak>]]]]
-        string(REGEX MATCH "^([0-9]+(\\.[0-9]+(\\.[0-9]+(\\.[0-9]+)?)?)?)?$" version_valid ${PROJECT_VERSION})
-        if(NOT version_valid AND NOT PROJECT_VERSION STREQUAL "0")
+        string(REGEX MATCH "^([0-9]+(\\.[0-9]+(\\.[0-9]+(\\.[0-9]+)?)?)?)?$" version_valid "${PROJECT_VERSION}")
+        if(NOT version_valid AND NOT "${PROJECT_VERSION}" STREQUAL "0")
             message(SEND_ERROR "Version \"${PROJECT_VERSION}\" format invalid.")
             return()
         endif()
 
         # Split the version string into major, minor, patch, and tweak components
-        string(REPLACE "." ";" version_components ${PROJECT_VERSION})
+        string(REPLACE "." ";" version_components "${PROJECT_VERSION}")
         list(GET version_components 0 PROJECT_VERSION_MAJOR)
         list(LENGTH version_components version_length)
         if(version_length GREATER 1)
@@ -382,6 +382,7 @@ function(__project_info test_components)
     # file with cmake's variables substituted and unprocessed generator expressions. The second
     # step, with file(GENERATE), processes the temporary file and substitute generator expression
     # into the final project_description.json file.
+    set(HINTS_FILE "${build_dir}/hints.yml")
     configure_file("${idf_path}/tools/cmake/project_description.json.in"
         "${build_dir}/project_description.json.templ")
     file(READ "${build_dir}/project_description.json.templ" project_description_json_templ)
@@ -391,6 +392,25 @@ function(__project_info test_components)
 
     # Generate component dependency graph
     depgraph_generate("${build_dir}/component_deps.dot")
+
+    # Assumption: all hints.yml files are bare YAML lists (no "---" document
+    # separators). Plain string concatenation is safe under this assumption.
+    # Note for consumers: yaml.safe_load() only parses the first YAML document,
+    # so document separators in source files would cause data loss.
+    set(_merged_hints "")
+    set(_global_hints_file "${idf_path}/tools/idf_py_actions/hints.yml")
+    if(EXISTS "${_global_hints_file}")
+        file(READ "${_global_hints_file}" _hints_content)
+        string(APPEND _merged_hints "${_hints_content}\n")
+    endif()
+    foreach(_comp_dir ${build_component_paths} ${test_component_paths})
+        set(_hints_file "${_comp_dir}/hints.yml")
+        if(EXISTS "${_hints_file}")
+            file(READ "${_hints_file}" _hints_content)
+            string(APPEND _merged_hints "${_hints_content}\n")
+        endif()
+    endforeach()
+    file(WRITE "${build_dir}/hints.yml" "${_merged_hints}")
 
     # We now have the following component-related variables:
     #
@@ -713,7 +733,7 @@ macro(project project_name)
             # Check if version information was passed to project() via the VERSION argument
             set(version_keyword_present FALSE)
             foreach(arg ${ARGN})
-                if(${arg} STREQUAL "VERSION")
+                if("${arg}" STREQUAL "VERSION")
                     set(version_keyword_present TRUE)
                 endif()
             endforeach()

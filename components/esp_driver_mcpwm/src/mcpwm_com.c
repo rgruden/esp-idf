@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -35,10 +35,9 @@ mcpwm_group_t *mcpwm_acquire_group_handle(int group_id)
             new_group = true;
             s_platform.groups[group_id] = group;
             group->group_id = group_id;
-            group->intr_priority = -1;
             group->spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
 #if MCPWM_USE_RETENTION_LINK
-            sleep_retention_module_t module = mcpwm_reg_retention_info[group_id].retention_module;
+            sleep_retention_module_t module = mcpwm_retention_infos[group_id].retention_module;
             sleep_retention_module_init_param_t init_param = {
                 .cbs = {
                     .create = {
@@ -114,7 +113,7 @@ void mcpwm_release_group_handle(mcpwm_group_t *group)
         }
 #endif
 #if MCPWM_USE_RETENTION_LINK
-        const periph_retention_module_t module_id = mcpwm_reg_retention_info[group_id].retention_module;
+        const periph_retention_module_t module_id = mcpwm_retention_infos[group_id].retention_module;
         if (sleep_retention_is_module_created(module_id)) {
             sleep_retention_module_free(module_id);
         }
@@ -129,32 +128,6 @@ void mcpwm_release_group_handle(mcpwm_group_t *group)
     if (do_deinitialize) {
         ESP_LOGD(TAG, "del group(%d)", group_id);
     }
-}
-
-esp_err_t mcpwm_check_intr_priority(mcpwm_group_t *group, int intr_priority)
-{
-    esp_err_t ret = ESP_OK;
-    bool intr_priority_conflict = false;
-    portENTER_CRITICAL(&group->spinlock);
-    if (group->intr_priority == -1) {
-        group->intr_priority = intr_priority;
-    } else if (intr_priority != 0) {
-        intr_priority_conflict = (group->intr_priority != intr_priority);
-    }
-    portEXIT_CRITICAL(&group->spinlock);
-    ESP_RETURN_ON_FALSE(!intr_priority_conflict, ESP_ERR_INVALID_STATE, TAG, "intr_priority conflict, already is %d but attempt to %d", group->intr_priority, intr_priority);
-    return ret;
-}
-
-int mcpwm_get_intr_priority_flag(mcpwm_group_t *group)
-{
-    int isr_flags = 0;
-    if (group->intr_priority) {
-        isr_flags |= 1 << (group->intr_priority);
-    } else {
-        isr_flags |= MCPWM_ALLOW_INTR_PRIORITY_MASK;
-    }
-    return isr_flags;
 }
 
 esp_err_t mcpwm_select_periph_clock(mcpwm_group_t *group, soc_module_clk_t clk_src)
@@ -275,16 +248,16 @@ static esp_err_t mcpwm_create_sleep_retention_link_cb(void *arg)
 {
     mcpwm_group_t *group = (mcpwm_group_t *)arg;
     int group_id = group->group_id;
-    sleep_retention_module_t module_id = mcpwm_reg_retention_info[group_id].retention_module;
-    esp_err_t err = sleep_retention_entries_create(mcpwm_reg_retention_info[group_id].regdma_entry_array,
-                                                   mcpwm_reg_retention_info[group_id].array_size,
+    sleep_retention_module_t module_id = mcpwm_retention_infos[group_id].retention_module;
+    esp_err_t err = sleep_retention_entries_create(mcpwm_retention_infos[group_id].regdma_entry_array,
+                                                   mcpwm_retention_infos[group_id].array_size,
                                                    REGDMA_LINK_PRI_MCPWM, module_id);
     return err;
 }
 void mcpwm_create_retention_module(mcpwm_group_t *group)
 {
     int group_id = group->group_id;
-    sleep_retention_module_t module_id = mcpwm_reg_retention_info[group_id].retention_module;
+    sleep_retention_module_t module_id = mcpwm_retention_infos[group_id].retention_module;
     _lock_acquire(&s_platform.mutex);
     if (sleep_retention_is_module_inited(module_id) && !sleep_retention_is_module_created(module_id)) {
         if (sleep_retention_module_allocate(module_id) != ESP_OK) {
