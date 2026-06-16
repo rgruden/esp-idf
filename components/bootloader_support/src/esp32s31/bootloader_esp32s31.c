@@ -24,19 +24,28 @@
 #include "soc/rtc_wdt_reg.h"
 #include "hal/rwdt_ll.h"
 #endif
+#include "hal/gpio_ll.h"
+#include "hal/brownout_ll.h"
 #include "soc/pmu_reg.h"
 #include "hal/regi2c_ctrl_ll.h"
 #include "hal/modem_lpcon_ll.h"
 #include "soc/reset_reasons.h"
 #include "hal/assist_debug_ll.h"
 #include "esp_rom_sys.h"
+#include "soc/regi2c_bias.h"
+#include "hal/regi2c_ctrl.h"
 
 ESP_LOG_ATTR_TAG(TAG, "boot.esp32s31");
 
 static inline void bootloader_hardware_init(void)
 {
-    /* Disable RF pll by default */
-    REG_SET_FIELD(PMU_RF_PWC_REG, PMU_XPD_RF_CIRCUIT, 0xFFFF);
+    /* GPIO 41 is not bonded out to the package, Isolate it to suppress
+     * floating leakage.*/
+    gpio_ll_input_disable(&GPIO, 41);
+    gpio_ll_output_disable(&GPIO, 41);
+    gpio_ll_pullup_dis(&GPIO, 41);
+    gpio_ll_pulldown_dis(&GPIO, 41);
+    gpio_ll_func_sel(&GPIO, 41, PIN_FUNC_GPIO);
 
     modem_lpcon_ll_enable_bus_clock(true);
 
@@ -46,6 +55,9 @@ static inline void bootloader_hardware_init(void)
     regi2c_ctrl_ll_master_force_enable_clock(true); // TODO: IDF-14678 Remove this?
     regi2c_ctrl_ll_master_configure_clock();
 #endif
+
+    REGI2C_WRITE_MASK(I2C_BIAS, I2C_BIAS_DREG_1P1, 10);
+    REGI2C_WRITE_MASK(I2C_BIAS, I2C_BIAS_DREG_1P1_PVT, 10);
 }
 
 void bootloader_enable_cpu_reset_info(void)
@@ -86,6 +98,13 @@ bool bootloader_check_if_wdt_reset(int cpu, soc_reset_reason_t reset_reason)
     return false;
 }
 
+static inline void bootloader_ana_reset_config(void)
+{
+    //Enable BOD reset
+    brownout_ll_ana_reset_enable(true);
+    bootloader_power_glitch_reset_config(true);
+}
+
 #if SOC_RTC_WDT_SUPPORTED
 static void bootloader_super_wdt_auto_feed(void)
 {
@@ -99,7 +118,8 @@ esp_err_t bootloader_init(void)
 {
     esp_err_t ret = ESP_OK;
 
-    bootloader_hardware_init();       // TODO: IDF-14696
+    bootloader_hardware_init();
+    bootloader_ana_reset_config();
 #if SOC_RTC_WDT_SUPPORTED
     bootloader_super_wdt_auto_feed();
 #endif

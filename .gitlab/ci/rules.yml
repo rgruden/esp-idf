@@ -52,7 +52,6 @@
   - "tools/ci/esp_err_to_name_exceptions.txt"
   - "tools/ci/test_build_system*.sh"
   - "tools/ci/test_build_system*.py"
-  - "tools/ci/build_template_app.sh"
   - "tools/test_build_system/**/*"
 
 .patterns-host_test_ldgen: &patterns-host_test_ldgen
@@ -67,6 +66,9 @@
   - "tools/test_build_system/**/*"
   - "tools/ci/test_configure_ci_environment.sh"
   - "tools/gen_esp_err_to_name.py"
+  - "tools/err_codes_extract.py"
+  - "tools/err_codes_to_c.py"
+  - "tools/err_codes_to_rst.py"
   - "tools/ci/check_soc_headers_leak.py"
   - "tools/ci/check_esp_memory_utils_headers.sh"
   - "tools/ci/check_blobs.sh"
@@ -220,12 +222,6 @@
 .rules:protected:check:
   rules:
     - <<: *if-protected-check
-
-.rules:protected:deploy:
-  rules:
-    - <<: *if-qa-test-tag
-      when: never
-    - <<: *if-protected-deploy
 
 .rules:master:push:
   rules:

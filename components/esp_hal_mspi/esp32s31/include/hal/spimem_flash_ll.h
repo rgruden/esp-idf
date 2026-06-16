@@ -37,8 +37,6 @@
 extern "C" {
 #endif
 
-//TODO: ["ESP32S31"] IDF-14777
-
 #define spimem_flash_ll_get_hw(host_id)  (((host_id)==SPI1_HOST ?  &SPIMEM1 : NULL ))
 #define spimem_flash_ll_hw_get_id(dev)   ((dev) == (void*)&SPIMEM1? SPI1_HOST: -1)
 
@@ -315,6 +313,34 @@ static inline uint32_t spimem_flash_ll_get_tsus_unit_in_cycles(spi_mem_dev_t *de
         tsus_unit = 4;
     }
     return tsus_unit;
+}
+
+/**
+ * @brief Get trs unit values in SPI_CLK cycles
+ *
+ * @param dev Beginning address of the peripheral registers.
+ * @return uint32_t trs unit values
+ */
+static inline uint32_t spimem_flash_ll_get_trs_unit_in_cycles(spi_mem_dev_t *dev)
+{
+    uint32_t trs_unit = 0;
+    if (dev->sus_status.flash_per_dly_128 == 1) {
+        trs_unit = 128;
+    } else {
+        trs_unit = 4;
+    }
+    return trs_unit;
+}
+
+/**
+ * Configure the delay after Resume
+ *
+ * @param dev Beginning address of the peripheral registers.
+ * @param dly_val delay time
+ */
+static inline void spimem_flash_ll_set_rs_delay(spi_mem_dev_t *dev, uint32_t dly_val)
+{
+    dev->ctrl1.cs_hold_dly_per = dly_val;
 }
 
 /**

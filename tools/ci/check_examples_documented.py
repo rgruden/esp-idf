@@ -123,8 +123,6 @@ KNOWN_MISSING = {
     'system/gcov',
     'system/gdbstub',
     'system/rt_mqueue',
-    'system/sysview_tracing',
-    'system/sysview_tracing_heap_log',
     'system/ulp/lp_core/build_system',
     'system/ulp/lp_core/build_system/main/ulp',
     'system/ulp/lp_core/debugging/main/ulp',
@@ -137,8 +135,6 @@ KNOWN_MISSING = {
     'system/ulp/ulp_riscv/gpio_pulse_counter',
     'system/unit_test/test',
     # TODO IDF-15382: add :example: references for peripherals examples
-    'peripherals/camera/dvp_dsi',
-    'peripherals/camera/dvp_spi_lcd',
     'peripherals/h264',
     'peripherals/i2s/i2s_advance/i2s_usb',
     'peripherals/spi_slave/receiver',

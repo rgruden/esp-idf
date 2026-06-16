@@ -3,6 +3,7 @@
 import pytest
 from pytest_embedded import Dut
 from pytest_embedded_idf.utils import idf_parametrize
+from pytest_embedded_idf.utils import soc_filtered_targets
 
 
 @pytest.mark.generic
@@ -10,11 +11,27 @@ from pytest_embedded_idf.utils import idf_parametrize
     'config',
     [
         'cache_safe',
+    ],
+    indirect=True,
+)
+@idf_parametrize(
+    'target', soc_filtered_targets('SOC_PARLIO_SUPPORTED == 1 and IDF_TARGET not in ["esp32c5"]'), indirect=['target']
+)
+def test_parlio_cache_safe(dut: Dut) -> None:
+    dut.run_all_single_board_cases(group='!release_only')
+
+
+@pytest.mark.generic
+@pytest.mark.parametrize(
+    'config',
+    [
         'release',
     ],
     indirect=True,
 )
-@idf_parametrize('target', ['esp32c6', 'esp32h2', 'esp32p4'], indirect=['target'])
+@idf_parametrize(
+    'target', soc_filtered_targets('SOC_PARLIO_SUPPORTED == 1 and IDF_TARGET not in ["esp32c5"]'), indirect=['target']
+)
 def test_parlio(dut: Dut) -> None:
     dut.run_all_single_board_cases()
 
@@ -27,7 +44,9 @@ def test_parlio(dut: Dut) -> None:
     ],
     indirect=True,
 )
-@idf_parametrize('target', ['esp32c6', 'esp32h2', 'esp32p4', 'esp32c5'], indirect=['target'])
+@idf_parametrize(
+    'target', soc_filtered_targets('SOC_PARLIO_SUPPORTED == 1 and SOC_FLASH_ENC_SUPPORTED == 1'), indirect=['target']
+)
 def test_parlio_with_virt_flash_enc(dut: Dut) -> None:
     print(' - Erase flash')
     dut.serial.erase_flash()
@@ -38,7 +57,7 @@ def test_parlio_with_virt_flash_enc(dut: Dut) -> None:
     dut.expect('Checking flash encryption...')
     dut.expect('Generating new flash encryption key...')
 
-    dut.run_all_single_board_cases()
+    dut.run_all_single_board_cases(group='!release_only')
 
 
 @pytest.mark.generic
@@ -51,7 +70,7 @@ def test_parlio_with_virt_flash_enc(dut: Dut) -> None:
 )
 @idf_parametrize('target', ['esp32c5'], indirect=['target'])
 def test_parlio_esp32c5(dut: Dut) -> None:
-    dut.run_all_single_board_cases()
+    dut.run_all_single_board_cases(group='!release_only')
 
 
 @pytest.mark.generic

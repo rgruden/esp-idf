@@ -51,7 +51,6 @@ def test_lp_vad(dut: Dut) -> None:
 
 
 @pytest.mark.generic_multi_device
-@pytest.mark.temp_skip_ci(targets=['esp32s31'], reason='TODO IDF-15572 Enable ULP multi device tests for ESP32-S31')
 @pytest.mark.parametrize('count', [2], indirect=True)
 @pytest.mark.parametrize(
     'config',
@@ -86,7 +85,6 @@ def test_lp_uart_multi_device(case_tester: CaseTester) -> None:
 
 
 @pytest.mark.generic_multi_device
-@pytest.mark.temp_skip_ci(targets=['esp32s31'], reason='TODO IDF-15572 Enable ULP multi device tests for ESP32-S31')
 @pytest.mark.parametrize(
     'target',
     soc_filtered_targets('SOC_ULP_LP_UART_SUPPORTED == 1'),

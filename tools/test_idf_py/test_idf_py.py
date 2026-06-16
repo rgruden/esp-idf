@@ -33,6 +33,28 @@ py_actions_path = os.path.normpath(os.path.join(current_dir, '..', 'idf_py_actio
 link_path = os.path.join(py_actions_path, 'test_ext')
 
 
+# As idf.py uses rich-click, unite modification variables to ensure constant results on various CI terminals
+_idf_py_test_env_saved: dict[str, str | None] = {}
+
+
+def setUpModule() -> None:
+    for key in ('COLUMNS', 'LINES', 'NO_COLOR', 'FORCE_COLOR', 'PY_COLORS', 'TERM'):
+        _idf_py_test_env_saved[key] = os.environ.get(key)
+    os.environ['COLUMNS'] = '200'
+    os.environ['LINES'] = '40'
+    os.environ['NO_COLOR'] = '1'
+    for unset in ('FORCE_COLOR', 'PY_COLORS'):
+        os.environ.pop(unset, None)
+
+
+def tearDownModule() -> None:
+    for key, previous in _idf_py_test_env_saved.items():
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
+
+
 class TestWithoutExtensions(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -156,6 +178,26 @@ class TestDependencyManagement(TestWithoutExtensions):
         self.assertIn(
             'WARNING: Command "clean" is found in the list of commands more than once.', capturedOutput.getvalue()
         )
+
+
+class TestIdfVersionSeeding(TestWithoutExtensions):
+    def test_idf_version_seeded_when_unset(self):
+        from idf_py_actions.tools import idf_version_from_cmake
+
+        with mock.patch.dict(os.environ):
+            os.environ.pop('IDF_VERSION', None)
+            idf.init_cli()(args=['--dry-run', 'build'], standalone_mode=False)
+            self.assertIn('IDF_VERSION', os.environ)
+            expected = idf_version_from_cmake()
+            self.assertIsNotNone(expected)
+            expected_stripped = expected.lstrip('v')
+            self.assertEqual(os.environ['IDF_VERSION'], expected_stripped)
+            self.assertFalse(os.environ['IDF_VERSION'].startswith('v'))
+
+    def test_idf_version_not_overwritten_when_set(self):
+        with mock.patch.dict(os.environ, {'IDF_VERSION': '0.0.0-sentinel'}):
+            idf.init_cli()(args=['--dry-run', 'build'], standalone_mode=False)
+            self.assertEqual(os.environ['IDF_VERSION'], '0.0.0-sentinel')
 
 
 class TestVerboseFlag(TestWithoutExtensions):

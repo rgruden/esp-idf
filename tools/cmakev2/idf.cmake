@@ -17,6 +17,11 @@ set(CMAKE_MODULE_PATH
 # for both cmakev1 and cmakev2.
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/version.cmake)
 
+# Suppress CMake warning: "Manually-specified variables were not used by the project: CONFIGDEP_ENABLE"
+# (CONFIGDEP_ENABLE is passed by idf.py but only used in the cmake v1 project() flow in project.cmake)
+# FIXME: When cmakev2 will start supporting configdep, this can be removed.
+set(_idf_ignore_configdep_enable "${CONFIGDEP_ENABLE}")
+
 # The gdbinit.cmake file from cmakev1 contains a single function,
 # __generate_gdbinit, which is used in the generation of
 # project_description.json.
@@ -32,6 +37,10 @@ include(${CMAKE_CURRENT_LIST_DIR}/../cmake/openocd.cmake)
 # idf_build_generate_depgraph function.
 include(${CMAKE_CURRENT_LIST_DIR}/../cmake/depgraph.cmake)
 
+# The err_codes.cmake file from cmakev1 provides idf_define_esp_err_codes(),
+# which generates per-component error code tables placed in a link-time array.
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/err_codes.cmake)
+
 include(component)
 include(build)
 include(kconfig)
@@ -42,6 +51,7 @@ include(ldgen)
 include(dfu)
 include(uf2)
 include(size)
+
 include(GetGitRevisionDescription)
 # For backward compatibility, since externalproject_add is used by
 # project_include.cmake in the bootloader component. The ExternalProject
@@ -94,7 +104,9 @@ function(__init_idf_path)
     endif()
 
     idf_build_set_property(IDF_PATH "${idf_path}")
+    # Components reference either ${IDF_PATH} or ${idf_path}; publish both.
     set(IDF_PATH ${idf_path} PARENT_SCOPE)
+    set(idf_path ${idf_path} PARENT_SCOPE)
     set(ENV{IDF_PATH} ${idf_path})
 endfunction()
 

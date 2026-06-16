@@ -9,17 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "esp_system.h"
-#include "esp_random.h"
-#include "esp_timer.h"
-
-#include "host/ble_hs.h"
-#include "services/gap/ble_svc_gap.h"
 
 #include "esp_ble_audio_lc3_defs.h"
 #include "esp_ble_audio_bap_api.h"
@@ -29,7 +22,7 @@
 #include "ble_audio_example_init.h"
 #include "ble_audio_example_utils.h"
 
-#define TAG "BAP_BSRC"
+#include "adv.h"
 
 ESP_BLE_AUDIO_BAP_LC3_BROADCAST_PRESET_16_2_1_DEFINE(preset_active,
                                                      ESP_BLE_AUDIO_LOCATION_FRONT_LEFT |
@@ -41,16 +34,6 @@ ESP_BLE_AUDIO_BAP_LC3_BROADCAST_PRESET_16_2_1_DEFINE(preset_active,
 
 #define LOCAL_BROADCAST_CODE   "1234"   /* Maximum length is 16 */
 #define LOCAL_BROADCAST_ID     0x123456
-
-#define ADV_HANDLE              0x00
-#define ADV_SID                 0
-#define ADV_TX_POWER            127
-#define ADV_ADDRESS             BLE_OWN_ADDR_PUBLIC
-#define ADV_PRIMARY_PHY         BLE_HCI_LE_PHY_1M
-#define ADV_SECONDARY_PHY       BLE_HCI_LE_PHY_2M
-#define ADV_INTERVAL            BLE_GAP_ADV_ITVL_MS(200)
-
-#define PER_ADV_INTERVAL        BLE_GAP_ADV_ITVL_MS(100)
 
 #define STREAM_COUNT            CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT
 #define SUBGROUP_COUNT          CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT
@@ -66,24 +49,36 @@ static esp_ble_audio_bap_broadcast_source_t *broadcast_source;
 
 static void broadcast_source_tx(struct broadcast_source_stream *source_stream);
 
+static int stream_index(const esp_ble_audio_bap_stream_t *stream)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(streams); i++) {
+        if (&streams[i].stream == stream) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 static void stream_started_cb(esp_ble_audio_bap_stream_t *stream)
 {
     struct broadcast_source_stream *source_stream = CONTAINER_OF(stream,
                                                                  struct broadcast_source_stream,
                                                                  stream);
+    int idx = stream_index(stream);
     esp_err_t err;
 
-    ESP_LOGI(TAG, "Stream %p started", stream);
+    ESP_LOGI(TAG, "[SRC #%d] Stream started", idx);
 
     if (source_stream->stream.qos == NULL || source_stream->stream.qos->sdu == 0) {
-        ESP_LOGE(TAG, "Invalid stream qos");
+        ESP_LOGE(TAG, "[SRC #%d] Invalid QoS", idx);
         return;
     }
 
     if (source_stream->data == NULL) {
         source_stream->data = calloc(1, source_stream->stream.qos->sdu);
         if (source_stream->data == NULL) {
-            ESP_LOGE(TAG, "Failed to alloc tx buffer, sdu %u", source_stream->stream.qos->sdu);
+            ESP_LOGE(TAG, "[SRC #%d] Failed to alloc TX buffer (sdu %u)",
+                     idx, source_stream->stream.qos->sdu);
             return;
         }
     }
@@ -94,7 +89,7 @@ static void stream_started_cb(esp_ble_audio_bap_stream_t *stream)
     /* Note: esp timer is not accurate enough */
     err = example_audio_tx_scheduler_start(&source_stream->scheduler, preset_active.qos.interval);
     if (err) {
-        ESP_LOGE(TAG, "Failed to start tx scheduler, err %d", err);
+        ESP_LOGE(TAG, "[SRC #%d] Scheduler start failed, err %d", idx, err);
         return;
     }
 
@@ -106,13 +101,14 @@ static void stream_stopped_cb(esp_ble_audio_bap_stream_t *stream, uint8_t reason
     struct broadcast_source_stream *source_stream = CONTAINER_OF(stream,
                                                                  struct broadcast_source_stream,
                                                                  stream);
+    int idx = stream_index(stream);
     esp_err_t err;
 
-    ESP_LOGI(TAG, "Stream %p stopped, reason 0x%02x", stream, reason);
+    ESP_LOGI(TAG, "[SRC #%d] Stream stopped, reason 0x%02x", idx, reason);
 
     err = example_audio_tx_scheduler_stop(&source_stream->scheduler);
     if (err) {
-        ESP_LOGE(TAG, "Failed to stop tx scheduler, err %d", err);
+        ESP_LOGE(TAG, "[SRC #%d] Scheduler stop failed, err %d", idx, err);
     }
 }
 
@@ -121,13 +117,14 @@ static void stream_disconnected_cb(esp_ble_audio_bap_stream_t *stream, uint8_t r
     struct broadcast_source_stream *source_stream = CONTAINER_OF(stream,
                                                                  struct broadcast_source_stream,
                                                                  stream);
+    int idx = stream_index(stream);
     esp_err_t err;
 
-    ESP_LOGI(TAG, "Stream %p disconnected, reason 0x%02x", stream, reason);
+    ESP_LOGI(TAG, "[SRC #%d] ISO disconnected, reason 0x%02x", idx, reason);
 
     err = example_audio_tx_scheduler_stop(&source_stream->scheduler);
     if (err) {
-        ESP_LOGE(TAG, "Failed to stop tx scheduler, err %d", err);
+        ESP_LOGE(TAG, "[SRC #%d] Scheduler stop failed, err %d", idx, err);
     }
 }
 
@@ -136,8 +133,10 @@ static void stream_sent_cb(esp_ble_audio_bap_stream_t *stream, void *user_data)
     struct broadcast_source_stream *source_stream = CONTAINER_OF(stream,
                                                                  struct broadcast_source_stream,
                                                                  stream);
+    char name[24];
 
-    example_audio_tx_scheduler_on_sent(&source_stream->scheduler, user_data, TAG, "stream", stream);
+    snprintf(name, sizeof(name), "SRC #%d", stream_index(stream));
+    example_audio_tx_scheduler_on_sent(&source_stream->scheduler, user_data, TAG, name);
 }
 
 static esp_ble_audio_bap_stream_ops_t stream_ops = {
@@ -170,13 +169,16 @@ static void broadcast_source_tx(struct broadcast_source_stream *source_stream)
         return;
     }
 
+    int idx = stream_index(&source_stream->stream);
+
     if (source_stream->stream.qos == NULL || source_stream->stream.qos->sdu == 0) {
-        ESP_LOGE(TAG, "Invalid stream qos");
+        ESP_LOGE(TAG, "[SRC #%d] Invalid QoS", idx);
         return;
     }
 
     if (source_stream->data == NULL) {
-        ESP_LOGE(TAG, "Tx buffer unavailable, sdu %u", source_stream->stream.qos->sdu);
+        ESP_LOGE(TAG, "[SRC #%d] TX buffer unavailable (sdu %u)",
+                 idx, source_stream->stream.qos->sdu);
         return;
     }
 
@@ -187,8 +189,7 @@ static void broadcast_source_tx(struct broadcast_source_stream *source_stream)
                                         source_stream->stream.qos->sdu,
                                         source_stream->seq_num);
     if (err) {
-        ESP_LOGD(TAG, "Failed to broadcast data on stream %p, err %d",
-                 &source_stream->stream, err);
+        ESP_LOGD(TAG, "[SRC #%d] send failed, err %d", idx, err);
         return;
     }
 
@@ -208,12 +209,12 @@ static void tx_scheduler_cb(void *arg)
 
 static void source_started_cb(esp_ble_audio_bap_broadcast_source_t *source)
 {
-    ESP_LOGI(TAG, "Broadcast source %p started", source);
+    ESP_LOGI(TAG, "Broadcast source started");
 }
 
 static void source_stopped_cb(esp_ble_audio_bap_broadcast_source_t *source, uint8_t reason)
 {
-    ESP_LOGI(TAG, "Broadcast source %p stopped, reason 0x%02x", source, reason);
+    ESP_LOGI(TAG, "Broadcast source stopped, reason 0x%02x", reason);
 
     for (size_t i = 0; i < ARRAY_SIZE(streams); i++) {
         if (streams[i].data != NULL) {
@@ -275,7 +276,7 @@ static esp_err_t broadcast_source_setup(void)
         memcpy(create_param.broadcast_code, LOCAL_BROADCAST_CODE, strlen(LOCAL_BROADCAST_CODE));
     }
 
-    ESP_LOGI(TAG, "Creating broadcast source with %u subgroups & %u streams per subgroup",
+    ESP_LOGI(TAG, "Creating broadcast source: %u subgroup(s), %u stream(s)/subgroup",
              ARRAY_SIZE(subgroup_param), streams_per_subgroup);
 
     err = esp_ble_audio_bap_broadcast_source_create(&create_param, &broadcast_source);
@@ -351,138 +352,55 @@ static uint8_t *per_adv_data_get(uint8_t *data_len)
     return data;
 }
 
-static int ext_adv_start(void)
+static int broadcast_start(void)
 {
-    struct ble_gap_periodic_adv_params per_params = {0};
-    struct ble_gap_ext_adv_params ext_params = {0};
-    struct os_mbuf *data = NULL;
+    esp_ble_audio_bap_broadcast_adv_info_t info = {
+        .adv_handle = ADV_HANDLE,
+    };
+    /* BASE (per_adv_data_get) needs broadcast_source to exist — built earlier
+     * by broadcast_source_setup(), so safe to call here. */
     uint8_t *ext_data = NULL;
     uint8_t *per_data = NULL;
-    uint8_t data_len = 0;
-    int err;
+    uint8_t ext_len = 0;
+    uint8_t per_len = 0;
+    int err = 0;
 
-    ext_params.connectable = 0;
-    ext_params.scannable = 0;
-    ext_params.legacy_pdu = 0;
-    ext_params.own_addr_type = ADV_ADDRESS;
-    ext_params.primary_phy = ADV_PRIMARY_PHY;
-    ext_params.secondary_phy = ADV_SECONDARY_PHY;
-    ext_params.tx_power = ADV_TX_POWER;
-    ext_params.sid = ADV_SID;
-    ext_params.itvl_min = ADV_INTERVAL;
-    ext_params.itvl_max = ADV_INTERVAL;
-
-    err = ble_gap_ext_adv_configure(ADV_HANDLE, &ext_params, NULL,
-                                    example_audio_gap_event_cb, NULL);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to configure ext adv params, err %d", err);
-        goto end;
-    }
-
-    ext_data = ext_adv_data_get(&data_len);
+    ext_data = ext_adv_data_get(&ext_len);
     if (ext_data == NULL) {
         err = -ENOMEM;
         goto end;
     }
 
-    data = os_msys_get_pkthdr(data_len, 0);
-    if (data == NULL) {
-        ESP_LOGE(TAG, "Failed to get ext adv mbuf");
-        err = -ENOMEM;
-        goto end;
-    }
-
-    err = os_mbuf_append(data, ext_data, data_len);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to append ext adv data, err %d", err);
-        os_mbuf_free_chain(data);
-        goto end;
-    }
-
-    err = ble_gap_ext_adv_set_data(ADV_HANDLE, data);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to set ext adv data, err %d", err);
-        goto end;
-    }
-
-    per_params.include_tx_power = 0;
-    per_params.itvl_min = PER_ADV_INTERVAL;
-    per_params.itvl_max = PER_ADV_INTERVAL;
-
-    err = ble_gap_periodic_adv_configure(ADV_HANDLE, &per_params);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to configure per adv params, err %d", err);
-        goto end;
-    }
-
-    per_data = per_adv_data_get(&data_len);
+    per_data = per_adv_data_get(&per_len);
     if (per_data == NULL) {
         err = -ENOMEM;
         goto end;
     }
 
-    data = os_msys_get_pkthdr(data_len, 0);
-    if (data == NULL) {
-        ESP_LOGE(TAG, "Failed to get per adv mbuf");
-        err = -ENOMEM;
-        goto end;
-    }
-
-    err = os_mbuf_append(data, per_data, data_len);
+    err = ext_adv_start(ext_data, ext_len, per_data, per_len);
     if (err) {
-        ESP_LOGE(TAG, "Failed to append per adv data, err %d", err);
-        os_mbuf_free_chain(data);
         goto end;
     }
-
-    err = ble_gap_periodic_adv_set_data(ADV_HANDLE, data);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to set per adv data, err %d", err);
-        goto end;
-    }
-
-    err = ble_gap_periodic_adv_start(ADV_HANDLE);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to start per advertising, err %d", err);
-        goto end;
-    }
-
-    err = ble_gap_ext_adv_start(ADV_HANDLE, 0, 0);
-    if (err) {
-        ESP_LOGE(TAG, "Failed to start ext advertising, err %d", err);
-        goto end;
-    }
-
-    ESP_LOGI(TAG, "Extended adv instance %u started", ADV_HANDLE);
-
-end:
-    if (ext_data) {
-        free(ext_data);
-    }
-    if (per_data) {
-        free(per_data);
-    }
-    return err;
-}
-
-static void broadcast_start(void)
-{
-    esp_ble_audio_bap_broadcast_adv_info_t info = {
-        .adv_handle = ADV_HANDLE,
-    };
-    int err;
 
     err = esp_ble_audio_bap_broadcast_adv_add(&info);
     if (err) {
         ESP_LOGE(TAG, "Failed to add adv for broadcast source, err %d", err);
-        return;
+        goto end;
     }
 
     err = esp_ble_audio_bap_broadcast_source_start(broadcast_source, ADV_HANDLE);
     if (err) {
         ESP_LOGE(TAG, "Failed to start broadcast source, err %d", err);
-        return;
     }
+
+end:
+    if (ext_data != NULL) {
+        free(ext_data);
+    }
+    if (per_data != NULL) {
+        free(per_data);
+    }
+    return err;
 }
 
 void app_main(void)
@@ -500,6 +418,12 @@ void app_main(void)
     err = bluetooth_init();
     if (err) {
         ESP_LOGE(TAG, "Failed to initialize BLE, err %d", err);
+        return;
+    }
+
+    err = app_host_init();
+    if (err) {
+        ESP_LOGE(TAG, "Failed to init host, err %d", err);
         return;
     }
 
@@ -525,15 +449,14 @@ void app_main(void)
                                               tx_scheduler_cb,
                                               &streams[i]);
         if (err) {
-            ESP_LOGE(TAG, "Failed to initialize tx scheduler[%u], err %d", i, err);
+            ESP_LOGE(TAG, "[SRC #%zu] Scheduler init failed, err %d", i, err);
             return;
         }
     }
 
-    err = ext_adv_start();
+    err = broadcast_start();
     if (err) {
+        ESP_LOGE(TAG, "Failed to start broadcast, err %d", err);
         return;
     }
-
-    broadcast_start();
 }

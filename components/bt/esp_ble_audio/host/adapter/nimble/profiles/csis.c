@@ -25,11 +25,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_CSIS, CONFIG_BT_ISO_LOG_LEVEL);
 
 #define CSIS_SVC_COUNT      CONFIG_BT_CSIP_SET_MEMBER_MAX_INSTANCE_COUNT
 
@@ -137,8 +139,8 @@ static int csis_svc_check(void)
 int bt_le_nimble_csis_attr_handle_set(void)
 {
     struct bt_gatt_attr *attr;
-    uint16_t start_handle;
-    uint16_t end_handle;
+    uint16_t start_handle = 0;
+    uint16_t end_handle = 0;
 
     LOG_DBG("[N]CsisAttrHdlSet[%u]", csis_svc_count);
 

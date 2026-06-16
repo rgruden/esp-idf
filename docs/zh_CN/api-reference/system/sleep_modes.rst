@@ -381,15 +381,22 @@ RTC 控制器中内嵌定时器，可用于在预定义的时间到达后唤醒�
             - Deep-sleep 模式（始终可用）
             - 启用 :ref:`CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP` 时的 Light-sleep 模式
 
+            .. only:: SOC_RTC_GPIO_EDGE_WAKEUP_SUPPORTED
+
+                在 {IDF_TARGET_NAME} 上，该 API 还支持边沿触发的唤醒模式：``ESP_GPIO_WAKEUP_GPIO_POSEDGE``（上升沿）、``ESP_GPIO_WAKEUP_GPIO_NEGEDGE``（下降沿）和 ``ESP_GPIO_WAKEUP_GPIO_ANYEDGE``（任意沿）。对于 ``ESP_GPIO_WAKEUP_GPIO_ANYEDGE``，当启用 :ref:`CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS` 时，由于空闲电平不确定，驱动会关闭内部上拉/下拉，建议使用外部上/下拉电阻或保证进入睡眠前线路电平稳定。
+
             .. note::
                 只有由 VDD3P3_RTC 电源域供电的 GPIO（RTC IO）可以与此 API 一起使用。具体支持的管脚请参考 `datasheet <{IDF_TARGET_DATASHEET_CN_URL}>`__ > IO 管脚。
+
+    .. note::
+        使用 IO 唤醒源（无论是电平模式还是边沿模式）将芯片从睡眠中唤醒时，唤醒信号必须保持（电平模式）或脉冲宽度（边沿模式）至少 3 个 RTC 慢时钟周期，唤醒逻辑才能可靠采样。一个慢时钟周期的时长取决于 :ref:`CONFIG_RTC_CLK_SRC` 的配置（例如 RC_SLOW @ ~136 kHz ≈ 7.4 µs/周期，XTAL32K @ 32.768 kHz ≈ 30.5 µs/周期）。该约束同样适用于 :cpp:func:`esp_sleep_enable_gpio_wakeup` 和 :cpp:func:`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown`。
 
 .. only:: esp32h2
 
     GPIO 唤醒
     ^^^^^^^^^^^
 
-    任何一个 IO 都可以用作外部输入管脚，将芯片从 Light-sleep 状态唤醒。调用 :cpp:func:`gpio_wakeup_enable` 函数可以将任意管脚单独配置为在高电平或低电平触发唤醒。此后，应调用 :cpp:func:`esp_sleep_enable_gpio_wakeup` 函数来启用此唤醒源。
+    任何一个 IO 都可以用作外部输入管脚，将芯片从 Light-sleep 状态唤醒。可调用 :cpp:func:`gpio_wakeup_enable` 为每个管脚单独配置唤醒条件（仅高/低电平）。此后，应调用 :cpp:func:`esp_sleep_enable_gpio_wakeup` 函数来启用此唤醒源。
 
 
 .. _uart_wakeup_light_sleep:
@@ -447,9 +454,11 @@ UART 唤醒支持以下模式：
     #. 初始化 LP UART（调用 :cpp:func:`lp_core_uart_init`）。
     #. 使用 :cpp:func:`lp_core_uart_wakeup_setup` 函数配置 LP_UART 的唤醒模式，参数使用 :cpp:type:`uart_wakeup_cfg_t` 结构体，配置方式与 HP UART 相同。
 
-    .. note::
+    .. only:: SOC_LP_CORE_LP_UART_WAKEUP_KEEP_TRIGGERED
 
-        当 LP 核因 LP_UART 唤醒后，必须在 LP 核进入睡眠前调用 :cpp:func:`ulp_lp_core_lp_uart_reset_wakeup_en` 函数或是复位整个 LP UART 模块以清除唤醒信号，否则会被重复唤醒。
+       .. note::
+
+           在支持 ``SOC_LP_CORE_LP_UART_WAKEUP_KEEP_TRIGGERED`` 的芯片上，LP UART 唤醒后唤醒信号会保持触发状态。LP 核启动流程（:cpp:func:`ulp_lp_core_update_wakeup_cause`）会自动调用 :cpp:func:`ulp_lp_core_lp_uart_reset_wakeup_en` 和 :cpp:func:`lp_core_uart_clear_buf` 清除该状态。若未走标准启动流程，则需手动处理，否则会被重复唤醒。
 
     有关 LP_UART 唤醒的示例代码，请参考 :example:`system/ulp/lp_core/lp_uart/lp_uart_char_seq_wakeup`。
 
@@ -484,47 +493,106 @@ RTC 外设和内存断电
 
     {IDF_TARGET_NAME} 中只有 RTC 高速内存，因此，如果程序中的某些值被标记为 ``RTC_DATA_ATTR``、``RTC_SLOW_ATTR`` 或 ``RTC_FAST_ATTR`` 属性，那么所有这些值都将被存入 RTC 高速内存，默认情况下保持供电。如有需要，也可以使用函数 :cpp:func:`esp_sleep_pd_config` 对其进行修改。
 
-flash 断电
-^^^^^^^^^^
+.. _spi_flash_power_down_dpd:
 
-默认情况下，调用函数 :cpp:func:`esp_light_sleep_start` 后，flash **不会** 断电，因为在 sleep 过程中断电 flash 存在风险。具体而言，flash 断电需要时间，但是在此期间，系统有可能被唤醒，导致 flash 重新被上电。此时，断电尚未完成又重新上电的硬件行为有可能导致 flash 无法正常工作。
+SPI Flash 进入 deep power-down 模式
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-理论上讲，在 flash 完全断电后可以仅唤醒系统，然而现实情况是 flash 断电所需的时间很难预测。如果用户为 flash 供电电路添加了滤波电容，断电所需时间可能会更长。此外，即使可以预知 flash 彻底断电所需的时间，有时也不能通过设置足够长的睡眠时间来确保 flash 断电的安全（比如，突发的异步唤醒源会使得实际的睡眠时间不可控）。
+为降低 Light-sleep 期间 SPI Flash 的功耗，ESP-IDF **优先推荐**采用 **Deep Power-Down（DPD）**：通过启用配置项 :ref:`CONFIG_ESP_SLEEP_SET_FLASH_DPD`，令 SPI Flash 在供电保持开启的前提下进入器件内部的深度休眠指令状态。多数 SPI Flash 在 DPD 下电流可降至极低水平（常低于 1 µA），同时可避免反复上下电带来的唤醒延迟。
+
+在几乎所有应用场景中，相较彻底切断 SPI Flash 供电，DPD 在安全性与功耗之间通常是更好的折中。
+
+.. note::
+    **两种方式互斥：** Light-sleep 下的 SPI Flash **断电**（:ref:`CONFIG_ESP_SLEEP_POWER_DOWN_FLASH` 或通过 ``esp_sleep_pd_config`` 将 ``ESP_PD_DOMAIN_VDDSDIO`` 置为关闭）与 **DPD** **不可同时使用**， 在 menuconfig 中仅能在禁用 :ref:`CONFIG_ESP_SLEEP_POWER_DOWN_FLASH` 后再启用 :ref:`CONFIG_ESP_SLEEP_SET_FLASH_DPD`。
 
 .. warning::
 
-    如果在 flash 的供电电路上添加了滤波电容，那么应当尽一切可能避免 flash 断电。
+    使用该功能前需要查阅使用芯片所搭载的 SPI Flash 的技术手册是否支持 deep power-down 模式。
 
-因为这些不可控的因素，ESP-IDF 很难保证 flash 断电的绝对安全。因此 ESP-IDF 不推荐用户断电 flash。对于一些功耗敏感型应用，可以通过设置 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_FLASH_LEAKAGE_WORKAROUND` 来减少 Light-sleep 期间 flash 的功耗。这种方式在几乎所有场景下都要比断电 flash 更好，兼顾了安全性和功耗。
+.. _spi_flash_power_down:
+
+SPI Flash 断电
+^^^^^^^^^^^^^^^^^^
+
+默认情况下，调用函数 :cpp:func:`esp_light_sleep_start` 后，SPI Flash **不会** 断电，因为在 sleep 过程中断电 SPI Flash 存在风险。具体而言，SPI Flash 断电需要时间，但是在此期间，系统有可能被唤醒，导致 SPI Flash 重新被上电。此时，断电尚未完成又重新上电的硬件行为有可能导致 SPI Flash 无法正常工作。
+
+理论上讲，在 SPI Flash 完全断电后可以仅唤醒系统，然而现实情况是 SPI Flash 断电所需的时间很难预测。如果用户为 SPI Flash 供电电路添加了滤波电容，断电所需时间可能会更长。此外，即使可以预知 SPI Flash 彻底断电所需的时间，有时也不能通过设置足够长的睡眠时间来确保 SPI Flash 断电的安全（比如，突发的异步唤醒源会使得实际的睡眠时间不可控）。
+
+.. warning::
+
+    如果在 SPI Flash 的供电电路上添加了滤波电容，那么应当尽一切可能避免 SPI Flash 断电。
+
+因为这些不可控的因素，ESP-IDF 很难保证 SPI Flash 断电的绝对安全。因此 ESP-IDF 不推荐用户断电 SPI Flash。对于一些功耗敏感型应用，可以通过设置 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_FLASH_LEAKAGE_WORKAROUND` 来减少 Light-sleep 期间 SPI Flash 的功耗。这种方式在几乎所有场景下都要比断电 SPI Flash 更好，兼顾了安全性和功耗。
 
 .. only:: SOC_SPIRAM_SUPPORTED
 
     值得一提的是，PSRAM 也有一个类似的 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_PSRAM_LEAKAGE_WORKAROUND`。
 
-考虑到有些用户能够充分评估断电 flash 的风险，并希望通过断电 flash 来获得更低的功耗，因此 ESP-IDF 提供了两种断电 flash 的机制：
+考虑到有些用户能够充分评估断电 SPI Flash 的风险，并希望通过断电 SPI Flash 来获得更低的功耗，因此 ESP-IDF 提供了两种断电 SPI Flash 的机制：
 
     .. list::
 
-        - 设置 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_POWER_DOWN_FLASH` 将使 ESP-IDF 以一个严格的条件来断电 flash。严格的条件具体指的是，RTC timer 是唯一的唤醒源 **且** 睡眠时间比 flash 彻底断电所需时间更长。
-        - 调用函数 ``esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF)`` 将使 ESP-IDF 以一个宽松的条件来断电 flash。宽松的条件具体指的是 RTC timer 唤醒源未被使能 **或** 睡眠时间比 flash 彻底断电所需时间更长。
+        - 设置 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_POWER_DOWN_FLASH` 将使 ESP-IDF 以一个严格的条件来断电 SPI Flash。严格的条件具体指的是，RTC timer 是唯一的唤醒源 **且** 睡眠时间比 SPI Flash 彻底断电所需时间更长。
+        - 调用函数 ``esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF)`` 将使 ESP-IDF 以一个宽松的条件来断电 SPI Flash。宽松的条件具体指的是 RTC timer 唤醒源未被使能 **或** 睡眠时间比 SPI Flash 彻底断电所需时间更长。
 
 .. note::
 
     .. list::
 
-        - Light-sleep 模式下，ESP-IDF 没有提供保证 flash 一定会被断电的机制。
-        - 不管用户的配置如何，函数 :cpp:func:`esp_deep_sleep_start` 都会强制断电 flash。
+        - Light-sleep 模式下，ESP-IDF 没有提供保证 SPI Flash 一定会被断电的机制。
+        - 不管用户的配置如何，函数 :cpp:func:`esp_deep_sleep_start` 都会强制断电 SPI Flash
 
-flash 进入 deep power-down 模式
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. _spi_flash_sleep_strategy_recommendations:
 
-除了通过让 flash 完全断电来降低芯片功耗之外，还可以通过启用 Kconfig 配置项 :ref:`CONFIG_ESP_SLEEP_SET_FLASH_DPD`，进一步减少休眠期间 flash 的功耗。与直接对 flash 断电相比，该功能能够避免芯片从休眠唤醒时 flash 重新上电所带来的额外延迟，同时也能保持极低的功耗。大多数 flash 在进入 Deep Power-Down（DPD）模式后电流消耗低于 1 µA。
+SPI Flash 休眠策略选择建议
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-在几乎所有应用场景中，使用 DPD 模式都比直接断电 flash 更具优势，兼顾了安全性与低功耗表现。
+在休眠场景下，SPI Flash 的处理方式直接影响系统的安全性、功耗。不同应用场景对这些因素的侧重不同，因此需要选择合适的 SPI Flash 休眠策略。
 
-.. warning::
+SPI Flash 不掉电
+""""""""""""""""""""
 
-    使用该功能前需要查阅使用芯片所搭载的 flash 的技术手册是否支持 deep power-down 模式。
+不同 SPI Flash 的待机功耗不一致，在 ESP 系列芯片中，SPI Flash 的待机功耗通常低于 30 µA，在以下场景中，建议保持 SPI Flash 不掉电：
+
+1. 系统对稳定性要求极高，无法接受 SPI Flash 掉电带来的任何潜在风险。
+
+2. 休眠时间较短或不可预测，例如存在异步唤醒源（GPIO、UART 等）。
+
+3. SPI Flash 供电电路中存在较大的滤波电容，导致 SPI Flash 实际断电时间难以估计。
+
+在上述情况下，保持 SPI Flash 供电是最保守、也是最安全的选择，但需要注意其待机功耗相对较高 (约 10-30 µA)。
+
+SPI Flash 进入 deep power-down（DPD）模式
+""""""""""""""""""""""""""""""""""""""""""
+
+若待机功耗仍偏高，应优先采用 **Deep Power-Down（DPD）**，通过 :ref:`CONFIG_ESP_SLEEP_SET_FLASH_DPD` 降低休眠电流；功耗数据、时序及启用方式参见前文 :ref:`spi_flash_power_down_dpd`。
+
+DPD 模式适用于以下场景：
+
+1. 需要显著降低休眠期间 SPI Flash 的功耗，但又希望避免 SPI Flash 重新上电的风险。
+
+2. 休眠时间较短或不可预测，例如存在异步唤醒源（GPIO、UART 等）。
+
+3. 使用的 SPI Flash 芯片明确支持 Deep Power-Down 模式。
+
+.. only:: not SOC_PM_FLASH_KEEP_POWER_IN_LSLP
+
+    SPI Flash 掉电
+    """""""""""""""""
+
+    可以参考 :ref:`spi_flash_power_down` 实现在休眠中掉电 SPI Flash。在以下条件满足或经过充分评估后，可以考虑该策略：
+
+    1. 应用对极低功耗有严格要求。
+
+    2. 唤醒源可控，通常仅启用 RTC timer 唤醒源。
+
+    3. 能够确保实际睡眠时间大于 SPI Flash 彻底断电所需时间。对于 ESP 系列芯片，SPI Flash 彻底断电所需时间可能大于 300ms。如果 SPI Flash 供电电路中存在并联电容，可能需要更长的睡眠时间。
+
+    4. 如果休眠时间过短，SPI Flash 上电和下电过程所消耗的功耗可能会超过保持供电时的功耗。
+
+    5. 对 SPI Flash 供电及 IO 状态有充分控制，休眠时避免因为管脚上拉导致 SPI Flash 漏电。
+
+    由于 SPI Flash 的断电过程受硬件设计、IO 阻抗特性、供电以及环境因素影响较大，ESP-IDF 无法保证在 Light-sleep 模式下 SPI Flash 一定能够安全断电，因此该方式仅适用于风险可控且经过充分验证的场景。
 
 配置 IO（仅适用于 Deep-sleep）
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -11,6 +11,7 @@
 #include "hal/cache_ll.h"
 #include "hal/cache_hal.h"
 #include "esp_private/sleep_retention.h"
+#include "esp_sleep.h"
 
 // Use retention link only when the target supports sleep retention is enabled
 #define I80_USE_RETENTION_LINK  (SOC_LCDCAM_LCD_SUPPORT_SLEEP_RETENTION && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP)
@@ -64,6 +65,7 @@ struct esp_lcd_i80_bus_t {
     uint8_t *format_buffer;  // The driver allocates an internal buffer for DMA to do data format transformer
     uint8_t *format_buffer_nc; // Non-cacheable version of format buffer
     size_t resolution_hz;    // LCD_CLK resolution, determined by selected clock source
+    soc_module_clk_t clk_src; // peripheral clock source, SOC_MOD_CLK_INVALID if not enabled
     size_t max_transfer_bytes; // Maximum number of bytes that can be transferred in one transaction
     gdma_channel_handle_t dma_chan; // DMA channel handle
     gdma_link_list_handle_t dma_link; // DMA link list handle
@@ -128,6 +130,9 @@ esp_err_t esp_lcd_new_i80_bus(const esp_lcd_i80_bus_config_t *bus_config, esp_lc
                         TAG, "invalid bus width:%d", bus_config->bus_width);
 #if !SOC_LCDCAM_LCD_SUPPORT_SLEEP_RETENTION
     ESP_RETURN_ON_FALSE(bus_config->flags.allow_pd == 0, ESP_ERR_NOT_SUPPORTED, TAG, "register back up is not supported");
+#if SOC_PM_SUPPORT_TOP_PD
+    esp_sleep_pd_config(ESP_PD_DOMAIN_TOP, ESP_PD_OPTION_ON); //IDF-15652
+#endif
 #endif // SOC_LCDCAM_LCD_SUPPORT_SLEEP_RETENTION
 
     // allocate i80 bus memory
@@ -135,6 +140,7 @@ esp_err_t esp_lcd_new_i80_bus(const esp_lcd_i80_bus_config_t *bus_config, esp_lc
     ESP_GOTO_ON_FALSE(bus, ESP_ERR_NO_MEM, err, TAG, "no mem for i80 bus");
     bus->bus_width = bus_config->bus_width;
     bus->bus_id = -1;
+    bus->clk_src = SOC_MOD_CLK_INVALID;
     // allocate the format buffer from internal memory, with DMA capability
     bus->format_buffer = heap_caps_calloc(1, LCD_I80_IO_FORMAT_BUF_SIZE,
                                           MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
@@ -166,6 +172,7 @@ esp_err_t esp_lcd_new_i80_bus(const esp_lcd_i80_bus_config_t *bus_config, esp_lc
                 .arg = bus,
             },
         },
+        .attribute = SLEEP_RETENTION_MODULE_ATTR_ATTACH,
         .depends = RETENTION_MODULE_BITMAP_INIT(CLOCK_SYSTEM)
     };
     if (sleep_retention_module_init(module_id, &init_param) != ESP_OK) {
@@ -257,6 +264,10 @@ err:
         if (bus->format_buffer) {
             free(bus->format_buffer);
         }
+        if (bus->clk_src != SOC_MOD_CLK_INVALID) {
+            esp_clk_tree_enable_src(bus->clk_src, false);
+            bus->clk_src = SOC_MOD_CLK_INVALID;
+        }
 #if CONFIG_PM_ENABLE
         if (bus->pm_lock) {
             esp_pm_lock_delete(bus->pm_lock);
@@ -276,8 +287,13 @@ esp_err_t esp_lcd_del_i80_bus(esp_lcd_i80_bus_handle_t bus)
     PERIPH_RCC_ATOMIC() {
         lcd_ll_enable_clock(bus->hal.dev, false);
     }
+    if (bus->clk_src != SOC_MOD_CLK_INVALID) {
+        esp_clk_tree_enable_src(bus->clk_src, false);
+        bus->clk_src = SOC_MOD_CLK_INVALID;
+    }
 #if I80_USE_RETENTION_LINK
     const periph_retention_module_t module_id = soc_i80_lcd_retention_info[bus_id].retention_module;
+    sleep_retention_module_detach(module_id);
     if (sleep_retention_is_module_created(module_id)) {
         assert(sleep_retention_is_module_inited(module_id));
         sleep_retention_module_free(module_id);
@@ -614,6 +630,10 @@ static void lcd_i80_create_retention_module(esp_lcd_i80_bus_t *bus)
         if (sleep_retention_module_allocate(module_id) != ESP_OK) {
             // even though the sleep retention module create failed, LCD driver should still work, so just warning here
             ESP_LOGW(TAG, "create retention module failed, power domain can't turn off");
+        } else {
+            if (sleep_retention_module_attach(module_id) != ESP_OK) {
+                ESP_LOGW(TAG, "attach retention module failed, power domain can't turn off");
+            }
         }
     }
 }
@@ -621,12 +641,12 @@ static void lcd_i80_create_retention_module(esp_lcd_i80_bus_t *bus)
 
 static esp_err_t lcd_i80_select_periph_clock(esp_lcd_i80_bus_handle_t bus, lcd_clock_source_t clk_src)
 {
+    ESP_RETURN_ON_ERROR(esp_clk_tree_enable_src((soc_module_clk_t)clk_src, true), TAG, "clock source enable failed");
+    bus->clk_src = (soc_module_clk_t)clk_src;
     // get clock source frequency
     uint32_t src_clk_hz = 0;
     ESP_RETURN_ON_ERROR(esp_clk_tree_src_get_freq_hz((soc_module_clk_t)clk_src, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &src_clk_hz),
                         TAG, "get clock source frequency failed");
-
-    ESP_RETURN_ON_ERROR(esp_clk_tree_enable_src((soc_module_clk_t)clk_src, true), TAG, "clock source enable failed");
     PERIPH_RCC_ATOMIC() {
         lcd_ll_select_clk_src(bus->hal.dev, clk_src);
         // force to use integer division, as fractional division might lead to clock jitter

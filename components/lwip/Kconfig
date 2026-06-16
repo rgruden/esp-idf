@@ -452,14 +452,6 @@ menu "LWIP"
                 Enabling this option allows DHCP server to support temporary static ARP entries
                 for DHCP Client. This will help the DHCP server to send the DHCP OFFER and DHCP ACK using IP unicast.
 
-        config LWIP_DHCPS_TEST_PARSE_OPTIONS
-            bool "Expose parse_options() for unit testing"
-            default n
-            depends on LWIP_DHCPS
-            help
-                Enables a non-static wrapper around the internal parse_options() function
-                so it can be called from test code. Only enable this for testing builds.
-
     endmenu # DHCPS
 
     menuconfig LWIP_AUTOIP
@@ -1212,9 +1204,13 @@ menu "LWIP"
 
         config LWIP_DNS_MAX_HOST_IP
             int "Maximum number of IP addresses per host"
+            range 1 8
             default 1
             help
                 Maximum number of IP addresses that can be returned by DNS queries for a single host.
+                Allowed values are 1--8. In lwIP this is ``DNS_MAX_HOST_IP``. Multi-IP DNS APIs
+                require the caller's ``addr_cnt`` argument to satisfy 0 < addr_cnt <= DNS_MAX_HOST_IP;
+                otherwise they return ``ERR_ARG``.
 
         config LWIP_DNS_MAX_SERVERS
             int "Maximum number of DNS servers"

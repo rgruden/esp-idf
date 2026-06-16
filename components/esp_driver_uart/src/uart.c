@@ -28,6 +28,7 @@
 #include "esp_private/gpio.h"
 #include "esp_private/esp_gpio_reserve.h"
 #include "esp_private/periph_ctrl.h"
+#include "esp_sleep.h"
 #include "esp_private/sleep_retention.h"
 #include "esp_clk_tree.h"
 #include "esp_rom_gpio.h"
@@ -251,6 +252,7 @@ static bool uart_module_enable(uart_port_t uart_num)
                             .arg = &uart_context[uart_num],
                         },
                     },
+                    .attribute = SLEEP_RETENTION_MODULE_ATTR_ATTACH,
                     .depends = RETENTION_MODULE_BITMAP_INIT(CLOCK_SYSTEM)
                 };
                 if (sleep_retention_module_init(module, &init_param) != ESP_OK) {
@@ -1067,6 +1069,9 @@ esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_conf
     bool allow_pd __attribute__((unused)) = (uart_config->flags.allow_pd || uart_config->flags.backup_before_sleep);
 #if !SOC_UART_SUPPORT_SLEEP_RETENTION
     ESP_RETURN_ON_FALSE(allow_pd == 0, ESP_ERR_NOT_SUPPORTED, UART_TAG, "not able to power down in light sleep");
+#if SOC_PM_SUPPORT_TOP_PD
+    esp_sleep_pd_config(ESP_PD_DOMAIN_TOP, ESP_PD_OPTION_ON); //IDF-15650
+#endif
 #endif
 
     uart_module_enable(uart_num);
@@ -1136,12 +1141,17 @@ esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_conf
                 if (sleep_retention_module_allocate(module) != ESP_OK) {
                     // Even though the sleep retention module create failed, UART driver should still work, so just warning here
                     ESP_LOGW(UART_TAG, "create retention module failed, power domain can't turn off");
+                } else {
+                    if (sleep_retention_module_attach(module) != ESP_OK) {
+                        ESP_LOGW(UART_TAG, "attach retention module failed, power domain can't turn off");
+                    }
                 }
             } else {
                 ESP_LOGW(UART_TAG, "retention module not initialized first, unable to create retention module");
             }
         } else if (!allow_pd && sleep_retention_is_module_created(module)) {
             assert(sleep_retention_is_module_inited(module));
+            sleep_retention_module_detach(module);
             sleep_retention_module_free(module);
         }
         _lock_release(&(uart_context[uart_num].mutex));
@@ -2142,6 +2152,7 @@ esp_err_t uart_driver_delete(uart_port_t uart_num)
         _lock_acquire(&(uart_context[uart_num].mutex));
         if (sleep_retention_is_module_created(module)) {
             assert(sleep_retention_is_module_inited(module));
+            sleep_retention_module_detach(module);
             sleep_retention_module_free(module);
         }
         _lock_release(&(uart_context[uart_num].mutex));

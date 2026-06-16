@@ -48,6 +48,10 @@ Dynamic frequency scaling (DFS) and automatic Light-sleep can be enabled in an a
 
   In Light-sleep, peripherals are clock gated, and interrupts (from GPIOs and internal peripherals) will not be generated. A wakeup source described in the :doc:`sleep_modes` documentation can be used to trigger wakeup from the Light-sleep state.
 
+.. warning::
+
+  Automatic Light-sleep is implemented using timer wakeup. Do not manually configure the timer wakeup source.
+
 .. only:: SOC_PM_SUPPORT_EXT0_WAKEUP and SOC_PM_SUPPORT_EXT1_WAKEUP
 
   For example, the EXT0 and EXT1 wakeup sources can be used to wake up the chip via a GPIO.
@@ -133,6 +137,11 @@ These functions are particularly useful for:
 4. Debugging issues related to lock management in applications
 
 To enable profiling features (timing information for individual locks), enable the :ref:`CONFIG_PM_PROFILING` option in menuconfig.
+
+Application Example
+-------------------
+
+The :example:`lowpower/power_management` example demonstrates dynamic frequency scaling, automatic Light-sleep, and power management locks.
 
 Dynamic Frequency Scaling and Peripheral Drivers
 ------------------------------------------------

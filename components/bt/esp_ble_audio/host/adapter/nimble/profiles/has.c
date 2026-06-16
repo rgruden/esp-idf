@@ -23,11 +23,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_HAS, CONFIG_BT_ISO_LOG_LEVEL);
 
 static const ble_uuid16_t has_uuid_features = BLE_UUID16_INIT(BT_UUID_HAS_HEARING_AID_FEATURES_VAL);
 static const ble_uuid16_t has_uuid_control_point = BLE_UUID16_INIT(BT_UUID_HAS_PRESET_CONTROL_POINT_VAL);
@@ -108,21 +110,26 @@ int bt_le_nimble_has_attr_handle_set(void)
     uint16_t end_handle = 0;
     int rc;
 
-    has_svc = lib_has_svc_get();
-    assert(has_svc);
-
-    LOG_DBG("[N]HasAttrHdlSet[%u]", has_svc->attr_count);
-    assert(has_svc->attr_count > 0);
-
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
     rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_HAS_VAL), &start_handle);
     if (rc) {
-        LOG_ERR("[N]HasNotFound[%d]", rc);
-        return rc;
+        LOG_DBG("[N]HasNotInit");
+        return 0;
     }
+
+    has_svc = lib_has_svc_get();
+    if (!has_svc) {
+        LOG_ERR("[N]HasSvcGetFail");
+        return -ENODEV;
+    }
+    assert(has_svc->attr_count > 0);
 
     end_handle = start_handle + has_svc->attr_count - 1;
 
-    LOG_DBG("[N]Hdl[%u][%u]", start_handle, end_handle);
+    LOG_DBG("[N]HasAttrHdlSet[%u][%u][%u]",
+            start_handle, end_handle, has_svc->attr_count);
 
     for (size_t i = 0; i < has_svc->attr_count; i++) {
         (has_svc->attrs + i)->handle = start_handle + i;
@@ -132,7 +139,7 @@ int bt_le_nimble_has_attr_handle_set(void)
     attr = has_svc->attrs + has_svc->attr_count - 1;
 
     if (attr->handle != end_handle) {
-        LOG_ERR("[N]HasMismatchAttrHdl (%u %u %u %u)",
+        LOG_ERR("[N]HasMismatchAttrHdl[%u][%u][%u][%u]",
                 start_handle, end_handle, attr->handle, has_svc->attr_count);
         return -1;
     }
@@ -151,7 +158,10 @@ static int has_svc_check(void)
      */
 
     has_svc = lib_has_svc_get();
-    assert(has_svc);
+    if (!has_svc) {
+        LOG_ERR("[N]HasSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]HasSvcCheck");
 

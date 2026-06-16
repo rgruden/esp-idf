@@ -7,6 +7,7 @@
 setuptools
 packaging
 click
+rich-click
 pyserial
 cryptography
 pyparsing
@@ -21,9 +22,11 @@ esp-idf-size
 esp-idf-diag
 esp-idf-panic-decoder
 esp-idf-sbom
+esp-pylib[cli,ide]
 pyclang
 construct
 rich
+esp-pylib[cli]
 psutil
 
 # ble's compressed log testing tool
@@ -32,3 +35,4 @@ tree_sitter_c
 
 # gdb extensions dependencies
 freertos_gdb
+idf_drivers_gdb

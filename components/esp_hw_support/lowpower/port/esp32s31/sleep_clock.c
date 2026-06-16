@@ -20,19 +20,19 @@ esp_err_t sleep_clock_system_retention_init(void *arg)
 
     const static sleep_retention_entries_config_t pcr_regs_retention[] = {
         /* Enable i2c master clock */
-        [0] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(0),     LP_PERICLKRST_I2CMST_CTRL_REG,            LP_PERICLKRST_LP_I2CMST_CLK_EN,                LP_PERICLKRST_LP_I2CMST_CLK_EN_M,                1, 0), .owner = ENTRY(0) },
+        [0] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(0),     LP_PERICLKRST_I2CMST_CTRL_REG,            LP_PERICLKRST_LP_I2CMST_CLK_EN,                LP_PERICLKRST_LP_I2CMST_CLK_EN_M,                1, 0), .owner = ENTRY(0) | ENTRY(1)},
         /* Start SYSPLL self-calibration */
-        [1] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(1),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          0,                                             HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP_M,            1, 0), .owner = ENTRY(0) },
+        [1] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(1),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          0,                                             HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP_M,            1, 0), .owner = ENTRY(0) | ENTRY(1)},
         /* Wait calibration done */
-        [2] = { .config = REGDMA_LINK_WAIT_INIT  (REGDMA_PCR_LINK(2),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          HP_SYS_CLKRST_REG_CPU_PLL_CAL_END,             HP_SYS_CLKRST_REG_CPU_PLL_CAL_END_M,             1, 0), .owner = ENTRY(0) },
+        [2] = { .config = REGDMA_LINK_WAIT_INIT  (REGDMA_PCR_LINK(2),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          HP_SYS_CLKRST_REG_CPU_PLL_CAL_END,             HP_SYS_CLKRST_REG_CPU_PLL_CAL_END_M,             1, 0), .owner = ENTRY(0) | ENTRY(1)},
         /* Stop SYSPLL self-calibration */
-        [3] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(3),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP,            HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP_M,            1, 0), .owner = ENTRY(0) },
+        [3] = { .config = REGDMA_LINK_WRITE_INIT (REGDMA_PCR_LINK(3),     HP_SYS_CLKRST_ANA_PLL_CTRL0_REG,          HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP,            HP_SYS_CLKRST_REG_CPU_PLL_CAL_STOP_M,            1, 0), .owner = ENTRY(0) | ENTRY(1)},
         /* Clock configuration retention */
-        [4] = { .config = REGDMA_LINK_CONTINUOUS_INIT(REGDMA_PCR_LINK(4), DR_REG_HP_SYS_CLKRST_BASE,                DR_REG_HP_SYS_CLKRST_BASE,                     N_REGS_PCR(),                                    0, 0), .owner = ENTRY(0) },  /* pcr */
-        [5] = { .config = REGDMA_LINK_WRITE_INIT     (REGDMA_PCR_LINK(5), HP_SYS_CLKRST_ROOT_CLK_CTRL0_REG,         HP_SYS_CLKRST_REG_SOC_CLK_UPDATE,              HP_SYS_CLKRST_REG_SOC_CLK_UPDATE_M,              1, 0), .owner = ENTRY(0) },
-        [6] = { .config = REGDMA_LINK_WAIT_INIT      (REGDMA_PCR_LINK(6), HP_SYS_CLKRST_ROOT_CLK_CTRL0_REG,         0x0,                                           HP_SYS_CLKRST_REG_SOC_CLK_UPDATE_M,              1, 0), .owner = ENTRY(0) },
-        [7] = { .config = REGDMA_LINK_WRITE_INIT     (REGDMA_PCR_LINK(7), HP_SYS_CLKRST_SDIO_HOST_FUNC_CTRL0_REG,   HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE, HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE_M, 1, 0), .owner = ENTRY(0) },
-        [8] = { .config = REGDMA_LINK_WAIT_INIT      (REGDMA_PCR_LINK(8), HP_SYS_CLKRST_SDIO_HOST_FUNC_CTRL0_REG,   0x0,                                           HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE_M, 1, 0), .owner = ENTRY(0) },
+        [4] = { .config = REGDMA_LINK_CONTINUOUS_INIT(REGDMA_PCR_LINK(4), DR_REG_HP_SYS_CLKRST_BASE,                DR_REG_HP_SYS_CLKRST_BASE,                     N_REGS_PCR(),                                    0, 0), .owner = ENTRY(0) | ENTRY(1)},  /* pcr */
+        [5] = { .config = REGDMA_LINK_WRITE_INIT     (REGDMA_PCR_LINK(5), HP_SYS_CLKRST_ROOT_CLK_CTRL0_REG,         HP_SYS_CLKRST_REG_SOC_CLK_UPDATE,              HP_SYS_CLKRST_REG_SOC_CLK_UPDATE_M,              1, 0), .owner = ENTRY(0) | ENTRY(1)},
+        [6] = { .config = REGDMA_LINK_WAIT_INIT      (REGDMA_PCR_LINK(6), HP_SYS_CLKRST_ROOT_CLK_CTRL0_REG,         0x0,                                           HP_SYS_CLKRST_REG_SOC_CLK_UPDATE_M,              1, 0), .owner = ENTRY(0) | ENTRY(1)},
+        [7] = { .config = REGDMA_LINK_WRITE_INIT     (REGDMA_PCR_LINK(7), HP_SYS_CLKRST_SDIO_HOST_FUNC_CTRL0_REG,   HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE, HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE_M, 1, 0), .owner = ENTRY(0) | ENTRY(1)},
+        [8] = { .config = REGDMA_LINK_WAIT_INIT      (REGDMA_PCR_LINK(8), HP_SYS_CLKRST_SDIO_HOST_FUNC_CTRL0_REG,   0x0,                                           HP_SYS_CLKRST_REG_SDIO_LS_CLK_EDGE_CFG_UPDATE_M, 1, 0), .owner = ENTRY(0) | ENTRY(1)},
     };
 
     esp_err_t err = sleep_retention_entries_create(pcr_regs_retention, ARRAY_SIZE(pcr_regs_retention), REGDMA_LINK_PRI_SYS_CLK, SLEEP_RETENTION_MODULE_CLOCK_SYSTEM);
@@ -43,15 +43,14 @@ esp_err_t sleep_clock_system_retention_init(void *arg)
     #undef N_REGS_PCR
 }
 
-#if CONFIG_MAC_BB_PD || CONFIG_BTDM_CTRL_SLEEP_ENABLE || CONFIG_IEEE802154_SLEEP_ENABLE
-#include "rom/ets_sys.h"
+#if CONFIG_MAC_BB_PD || CONFIG_BT_CTRL_SLEEP_ENABLE || CONFIG_IEEE802154_SLEEP_ENABLE
 esp_err_t sleep_clock_modem_retention_init(void *arg)
 {
     #define N_REGS_SYSCON() (((MODEM_SYSCON_MEM_RF2_CONF_REG - MODEM_SYSCON_TEST_CONF_REG) / 4) + 1)
     #define N_REGS_LPCON() (((MODEM_LPCON_MODEM_INTR_STATUS_REG - MODEM_LPCON_TEST_CONF_REG) / 4) + 1)
     const static sleep_retention_entries_config_t modem_regs_retention[] = {
-        [0] = { .config = REGDMA_LINK_WRITE_INIT(REGDMA_MODEMSYSCON_LINK(0), 0x20109c30, 0xf, 0xffffffff, 1, 0), .owner = ENTRY(0) | ENTRY(1) },
-        [1] = { .config = REGDMA_LINK_CONTINUOUS_INIT(REGDMA_MODEMSYSCON_LINK(1), MODEM_SYSCON_TEST_CONF_REG, MODEM_SYSCON_TEST_CONF_REG, 12, 0, 0), .owner = ENTRY(0) | ENTRY(1) }, /* MODEM SYSCON */
+        [0] = { .config = REGDMA_LINK_CONTINUOUS_INIT(REGDMA_MODEMSYSCON_LINK(0), MODEM_SYSCON_TEST_CONF_REG, MODEM_SYSCON_TEST_CONF_REG, 12, 0, 0), .owner = ENTRY(0) | ENTRY(1) }, /* MODEM SYSCON */
+        [1] = { .config = REGDMA_LINK_WRITE_INIT(REGDMA_CLOCK_ICG_LINK(0), HP_SYS_CLKRST_MODEM_CONF_REG, 0x3d, 0x3d, 0, 0), .owner = ENTRY(1)},
         [2] = { .config = REGDMA_LINK_CONTINUOUS_INIT(REGDMA_MODEMLPCON_LINK(0), MODEM_LPCON_TEST_CONF_REG, MODEM_LPCON_TEST_CONF_REG, N_REGS_LPCON(), 0, 0), .owner = ENTRY(0) | ENTRY(1) }, /* MODEM SYSCON */
     };
 
@@ -68,6 +67,7 @@ bool clock_domain_pd_allowed(void)
 {
     const sleep_retention_module_bitmap_t inited_modules = sleep_retention_get_inited_modules();
     const sleep_retention_module_bitmap_t created_modules = sleep_retention_get_created_modules();
+    const sleep_retention_module_bitmap_t retained_modules = sleep_retention_get_retained_modules();
     const sleep_retention_module_bitmap_t sys_clk_dep_modules = (sleep_retention_module_bitmap_t){ .bitmap[SLEEP_RETENTION_MODULE_SYS_PERIPH >> 5] = BIT(SLEEP_RETENTION_MODULE_SYS_PERIPH % 32) };
 /* The clock and reset of MODEM (WiFi, BLE and 15.4) modules are managed
      * through MODEM_SYSCON, when one or more MODEMs are initialized, it is
@@ -96,7 +96,7 @@ bool clock_domain_pd_allowed(void)
         mask.bitmap[SLEEP_RETENTION_MODULE_CLOCK_SYSTEM >> 5] |= BIT(SLEEP_RETENTION_MODULE_CLOCK_SYSTEM % 32);
     }
 
-    #if SOC_WIFI_SUPPORTED || SOC_BT_SUPPORTED || SOC_IEEE802154_SUPPORTED
+#if SOC_WIFI_SUPPORTED || SOC_BT_SUPPORTED || SOC_IEEE802154_SUPPORTED
     const sleep_retention_module_bitmap_t modem_modules = sleep_retention_module_bitmap_and(inited_modules, modem_clk_dep_modules);
     if (!sleep_retention_module_bitmap_eq(modem_modules, null_module)) {
         mask.bitmap[SLEEP_RETENTION_MODULE_CLOCK_MODEM >> 5] |= BIT(SLEEP_RETENTION_MODULE_CLOCK_MODEM % 32);
@@ -105,21 +105,24 @@ bool clock_domain_pd_allowed(void)
 
     const sleep_retention_module_bitmap_t clock_domain_inited_modules = sleep_retention_module_bitmap_and(inited_modules, mask);
     const sleep_retention_module_bitmap_t clock_domain_created_modules = sleep_retention_module_bitmap_and(created_modules, mask);
-    return sleep_retention_module_bitmap_eq(clock_domain_inited_modules, clock_domain_created_modules);
+    const sleep_retention_module_bitmap_t clock_domain_retained_modules = sleep_retention_module_bitmap_and(retained_modules, mask);
+    bool ic = sleep_retention_module_bitmap_eq(clock_domain_inited_modules, clock_domain_created_modules);
+    bool cr = sleep_retention_module_bitmap_eq(clock_domain_created_modules, clock_domain_retained_modules);
+    return ic && cr;
 }
 
 ESP_SYSTEM_INIT_FN(sleep_clock_startup_init, SECONDARY, BIT(0), 106)
 {
     sleep_retention_module_init_param_t init_param = {
         .cbs       = { .create = { .handle = sleep_clock_system_retention_init, .arg = NULL } },
-        .attribute = SLEEP_RETENTION_MODULE_ATTR_PASSIVE
+        .attribute = SLEEP_RETENTION_MODULE_ATTR_PASSIVE | SLEEP_RETENTION_MODULE_ATTR_ATTACH
     };
     sleep_retention_module_init(SLEEP_RETENTION_MODULE_CLOCK_SYSTEM, &init_param);
 
-#if CONFIG_MAC_BB_PD || CONFIG_BTDM_CTRL_SLEEP_ENABLE || CONFIG_IEEE802154_SLEEP_ENABLE
+#if CONFIG_MAC_BB_PD || CONFIG_BT_CTRL_SLEEP_ENABLE || CONFIG_IEEE802154_SLEEP_ENABLE
     init_param = (sleep_retention_module_init_param_t) {
         .cbs       = { .create = { .handle = sleep_clock_modem_retention_init, .arg = NULL } },
-        .attribute = SLEEP_RETENTION_MODULE_ATTR_PASSIVE
+        .attribute = SLEEP_RETENTION_MODULE_ATTR_PASSIVE | SLEEP_RETENTION_MODULE_ATTR_ATTACH
     };
     sleep_retention_module_init(SLEEP_RETENTION_MODULE_CLOCK_MODEM, &init_param);
 #endif

@@ -8,6 +8,8 @@ if(CONFIG_IDF_TARGET_ESP32S3)
     set(TARGET_SRC_NAME "esp32c3")
 elseif(CONFIG_IDF_TARGET_ESP32C61)
     set(TARGET_SRC_NAME "esp32c6")
+elseif(CONFIG_IDF_TARGET_ESP32H21)
+    set(TARGET_SRC_NAME "esp32h2")
 else()
     set(TARGET_SRC_NAME "${idf_target}")
 endif()
@@ -59,11 +61,15 @@ if(CONFIG_IDF_DOC_BUILD OR CONFIG_BT_ENABLED)
     list(APPEND srcs ${ble_mesh_srcs})
     list(APPEND include_dirs ${ble_mesh_include_dirs})
 
+    # BLE ISO (host shim + ISO transport, reusable by BLE Audio / HID-over-ISO / etc.)
+    add_subdirectory(esp_ble_iso)
+    list(APPEND srcs ${ble_iso_srcs})
+    list(APPEND include_dirs ${ble_iso_include_dirs})
+
     # BLE Audio
     add_subdirectory(esp_ble_audio)
     list(APPEND srcs ${ble_audio_srcs})
     list(APPEND include_dirs ${ble_audio_include_dirs})
-    list(APPEND priv_include_dirs ${ble_audio_priv_include_dirs})
 
     # When log compression is enabled, selected logs are replaced
     # by auto-generated macros that emit pre-encoded data.
@@ -85,6 +91,7 @@ set(bt_priv_requires
     esp_ringbuf
     esp_gdbstub
     esp_security
+    esp_event
 )
 
 idf_component_register(SRCS "${srcs}"
@@ -94,6 +101,12 @@ idf_component_register(SRCS "${srcs}"
                        PRIV_REQUIRES "${bt_priv_requires}"
                        LDFRAGMENTS "${ldscripts}")
 
+idf_component_get_property(bt_component_type bt COMPONENT_TYPE)
+if(bt_component_type STREQUAL "LIBRARY")
+    idf_component_optional_requires(PRIVATE ble_insights)
+else()
+    idf_component_optional_requires(INTERFACE ble_insights)
+endif()
 
 if(CONFIG_BT_ENABLED)
     target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-implicit-fallthrough -Wno-unused-const-variable)

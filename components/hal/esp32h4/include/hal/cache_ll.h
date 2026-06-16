@@ -24,8 +24,8 @@ extern "C" {
 #define CACHE_LL_DEFAULT_IBUS_MASK                  CACHE_BUS_IBUS0
 #define CACHE_LL_DEFAULT_DBUS_MASK                  CACHE_BUS_DBUS0
 
-#define CACHE_LL_L1_ACCESS_EVENT_MASK               (1<<4)
-#define CACHE_LL_L1_ACCESS_EVENT_CACHE_FAIL         (1<<4)
+#define CACHE_LL_L1_ACCESS_EVENT_MASK               (BIT(0) | BIT(1) | BIT(4))
+#define CACHE_LL_L1_ACCESS_EVENT_CACHE_FAIL         CACHE_LL_L1_ACCESS_EVENT_MASK
 
 #define CACHE_LL_ID_ALL                             2   //All of the caches in a type and level, make this value greater than any ID
 #define CACHE_LL_LEVEL_INT_MEM                      0   //Cache level for accessing internal mem
@@ -42,7 +42,6 @@ typedef enum {
     CACHE_LL_PRELOAD_AFTER_FETCH = 1,
     CACHE_LL_PRELOAD_ARBITRARY = 2,
 } cache_ll_preload_strategy_t;
-
 
 /**
  * @brief Initialize the cache clock
@@ -578,7 +577,6 @@ static inline void cache_ll_writeback_all(uint32_t cache_level, cache_type_t typ
     }
 }
 
-
 /*------------------------------------------------------------------------------
  * Freeze
  *----------------------------------------------------------------------------*/
@@ -742,7 +740,7 @@ static inline void cache_ll_preload(uint32_t cache_level, cache_type_t type, uin
         break;
     case CACHE_TYPE_ALL:
     default:
-        map = CACHE_MAP_ALL;
+        map = CACHE_MAP_MASK;
         break;
     }
     Cache_Start_Preload(map, vaddr, size, order);
@@ -766,7 +764,7 @@ static inline void cache_ll_preload_wait_done(uint32_t cache_level, cache_type_t
         break;
     case CACHE_TYPE_ALL:
     default:
-        map = CACHE_MAP_ALL;
+        map = CACHE_MAP_MASK;
         break;
     }
     while (Cache_Preload_Done(map) == 0) {
@@ -889,7 +887,7 @@ __attribute__((always_inline))
 static inline void cache_ll_l1_disable_bus(uint32_t bus_id, cache_bus_mask_t mask)
 {
     //On esp32h4, only `CACHE_BUS_IBUS0` and `CACHE_BUS_DBUS0` are supported. Use `cache_ll_l1_get_bus()` to get your bus first
-    HAL_ASSERT((mask & (CACHE_BUS_IBUS1 | CACHE_BUS_IBUS2| CACHE_BUS_DBUS1 | CACHE_BUS_DBUS2)) == 0);
+    HAL_ASSERT((mask & (CACHE_BUS_IBUS1 | CACHE_BUS_IBUS2 | CACHE_BUS_DBUS1 | CACHE_BUS_DBUS2)) == 0);
 
     uint32_t ibus_mask = 0;
     if (bus_id == 0) {

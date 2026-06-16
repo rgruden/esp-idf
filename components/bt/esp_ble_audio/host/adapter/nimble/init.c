@@ -23,6 +23,8 @@
 
 #include "../../../lib/include/audio.h"
 
+LOG_MODULE_REGISTER(LEA_NINIT, CONFIG_BT_ISO_LOG_LEVEL);
+
 #if CONFIG_BT_ASCS_MAX_ASE_SNK_COUNT
 #define ASCS_ASE_SNK_CCCD_COUNT                 CONFIG_BT_ASCS_MAX_ASE_SNK_COUNT
 #else /* CONFIG_BT_ASCS_MAX_ASE_SNK_COUNT */
@@ -166,7 +168,7 @@ int bt_le_nimble_audio_init(void)
     }
 #endif /* CONFIG_BT_PACS */
 
-#if (BLE_AUDIO_SVC_SEP_ADD == 0)
+#if (BLE_AUDIO_SVC_DEFERRED_ADD == 0)
 #if CONFIG_BT_ASCS
     err = bt_le_nimble_ascs_init();
     if (err) {
@@ -201,7 +203,7 @@ int bt_le_nimble_audio_init(void)
         return err;
     }
 #endif /* CONFIG_BT_HAS */
-#endif /* (BLE_AUDIO_SVC_SEP_ADD == 0) */
+#endif /* (BLE_AUDIO_SVC_DEFERRED_ADD == 0) */
 
     return err;
 }
@@ -311,13 +313,18 @@ static int nimble_gatt_csis_init(struct bt_le_audio_start_info *info,
         }
 
         csis_svc[count] = lib_csip_set_member_svc_get(info->csis_insts[i].svc_inst);
-        assert(csis_svc[count]);
+        if (!csis_svc[count]) {
+            LOG_ERR("[N]CsisSvcGetFail[%u]", i);
+            return -ENODEV;
+        }
 
         if (info->csis_insts[i].included_by_cas) {
             if (*inc_csis_svc == NULL) {
                 *inc_csis_svc = csis_svc[count];
             } else {
-                assert(0);
+                /* CAS may include at most one CSIS — caller misconfigured. */
+                LOG_ERR("[N]CsisMultiIncByCas");
+                return -EINVAL;
             }
         }
 
@@ -417,7 +424,7 @@ int bt_le_nimble_audio_start(void *info)
     ARG_UNUSED(inc_csis_svc);
 #endif /* CONFIG_BT_CAP_ACCEPTOR */
 
-#if (BLE_AUDIO_SVC_SEP_ADD == 0)
+#if (BLE_AUDIO_SVC_DEFERRED_ADD == 0)
 #if CONFIG_BT_MCS
     err = bt_le_nimble_media_proxy_pl_init();
     if (err) {
@@ -438,7 +445,7 @@ int bt_le_nimble_audio_start(void *info)
         return err;
     }
 #endif /* CONFIG_BT_MICP_MIC_DEV */
-#endif /* (BLE_AUDIO_SVC_SEP_ADD == 0) */
+#endif /* (BLE_AUDIO_SVC_DEFERRED_ADD == 0) */
 
     err = ble_gatts_start();
     if (err) {

@@ -560,6 +560,15 @@ esp_err_t esp_http_client_set_user_data(esp_http_client_handle_t client, void *d
     return ESP_OK;
 }
 
+esp_err_t esp_http_client_set_event_handler(esp_http_client_handle_t client, http_event_handle_cb event_handler)
+{
+    if (client == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    client->event_handler = event_handler;
+    return ESP_OK;
+}
+
 static esp_err_t _set_config(esp_http_client_handle_t client, const esp_http_client_config_t *config)
 {
     esp_err_t ret = ESP_OK;
@@ -1142,6 +1151,19 @@ esp_err_t esp_http_client_set_redirection(esp_http_client_handle_t client)
         return ESP_ERR_INVALID_ARG;
     }
     ESP_LOGD(TAG, "Redirect to %s", client->location);
+
+    /* On an HTTPS origin, only allow https:// redirect targets. Any other
+     * scheme (http, ftp, ws, ...) is rejected before client state is
+     * modified to prevent transport-layer downgrade attacks. */
+    if (client->connection_info.scheme != NULL &&
+        strcasecmp(client->connection_info.scheme, "https") == 0 &&
+        strncasecmp(client->location, "https://", 8) != 0) {
+        ESP_LOGE(TAG, "HTTPS origin can only redirect to https:// targets (got %s). "
+                 "Set disable_auto_redirect and handle manually if intended.",
+                 client->location);
+        return ESP_ERR_HTTP_REDIRECT_DOWNGRADE;
+    }
+
     esp_err_t err = esp_http_client_set_url(client, client->location);
     if (err == ESP_OK) {
         client->redirect_counter ++;
@@ -1178,9 +1200,10 @@ static esp_err_t esp_http_check_response(esp_http_client_handle_t client)
             if (client->disable_auto_redirect) {
                 http_dispatch_event(client, HTTP_EVENT_REDIRECT, NULL, 0);
             } else {
-                if (esp_http_client_set_redirection(client) != ESP_OK){
-                    return ESP_FAIL;
-                };
+                esp_err_t redir_err = esp_http_client_set_redirection(client);
+                if (redir_err != ESP_OK) {
+                    return redir_err;
+                }
             }
             esp_http_client_redirect_event_data_t evt_data = {
                 .status_code = client->response->status_code,

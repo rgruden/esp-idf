@@ -17,6 +17,7 @@ Application Examples
 --------------------
 
 - :example:`protocols/esp_http_client` demonstrates how to use the ESP HTTP Client to make HTTP/S requests.
+- :example:`protocols/esp_http_client_mutual_auth` demonstrates how to configure mutual TLS authentication with the ESP HTTP Client.
 
 
 Basic HTTP Request
@@ -199,6 +200,8 @@ Event Handling
 ESP HTTP Client supports event handling by triggering an event handler corresponding to the event which takes place. :cpp:enum:`esp_http_client_event_id_t` contains all the events which could occur while performing an HTTP request using the ESP HTTP Client.
 
 To enable event handling, you just need to set a callback function using the :cpp:member:`esp_http_client_config_t::event_handler` member.
+
+Also you can set a callback function after the client is initialized using the :cpp:func:`esp_http_client_set_event_handler` function.
 
 ESP HTTP Client Diagnostic Information
 --------------------------------------

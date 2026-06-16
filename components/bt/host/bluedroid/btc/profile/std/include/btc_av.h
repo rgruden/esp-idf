@@ -29,12 +29,13 @@
 #if (BTC_AV_INCLUDED == TRUE)
 
 #if (BTA_AV_CO_CP_SCMS_T == TRUE)
-#define BTC_MEDIA_AA_SBC_OFFSET (AVDT_MEDIA_OFFSET + BTA_AV_SBC_HDR_SIZE + 1)
+#define BTC_MEDIA_AA_OFFSET (AVDT_MEDIA_OFFSET + 1)
 #else
-#define BTC_MEDIA_AA_SBC_OFFSET (AVDT_MEDIA_OFFSET + BTA_AV_SBC_HDR_SIZE)
+#define BTC_MEDIA_AA_OFFSET (AVDT_MEDIA_OFFSET)
 #endif
 
-#define BTC_AUDIO_BUFF_OFFSET   BTC_MEDIA_AA_SBC_OFFSET
+#define BTC_MEDIA_AA_SBC_OFFSET (BTC_MEDIA_AA_OFFSET + BTA_AV_SBC_HDR_SIZE)
+#define BTC_AUDIO_BUFF_OFFSET   (BTC_MEDIA_AA_OFFSET)
 
 // global variable to indicate avrc is initialized with a2dp
 extern bool g_av_with_rc;
@@ -286,6 +287,17 @@ void btc_av_clear_remote_suspend_flag(void);
  *
  ******************************************************************************/
 uint8_t btc_av_get_service_id(void);
+
+#if (BTC_AV_SRC_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         btc_av_report_all_snk_codec_caps
+**
+** Description      Report all sink codec capabilities to the application.
+**
+*******************************************************************************/
+void btc_av_report_all_snk_codec_caps(tBTA_AV_HNDL hndl, esp_a2d_sep_mcc_t *sep_mcc, UINT8 sep_num);
+#endif /* BTC_AV_SRC_INCLUDED */
 
 #endif  ///BTC_AV_INCLUDED == TRUE
 

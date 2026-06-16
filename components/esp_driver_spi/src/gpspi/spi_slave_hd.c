@@ -99,6 +99,7 @@ static esp_err_t s_spi_create_sleep_retention_cb(void *arg)
 esp_err_t spi_slave_hd_init(spi_host_device_t host_id, const spi_bus_config_t *bus_config, const spi_slave_hd_slot_config_t *config)
 {
     bool append_mode = (config->flags & SPI_SLAVE_HD_APPEND_MODE);
+    bool three_wire_mode = (config->flags & SPI_SLAVE_HD_3WIRE_MODE);
     esp_err_t ret = ESP_OK;
 
     SPIHD_CHECK(VALID_HOST(host_id), "invalid host", ESP_ERR_INVALID_ARG);
@@ -111,6 +112,7 @@ esp_err_t spi_slave_hd_init(spi_host_device_t host_id, const spi_bus_config_t *b
 #ifndef CONFIG_SPI_SLAVE_ISR_IN_IRAM
     SPIHD_CHECK((bus_config->intr_flags & ESP_INTR_FLAG_IRAM) == 0, "ESP_INTR_FLAG_IRAM should be disabled when CONFIG_SPI_SLAVE_ISR_IN_IRAM is not set.", ESP_ERR_INVALID_ARG);
 #endif
+    SPIHD_CHECK(!three_wire_mode || GPIO_IS_VALID_OUTPUT_GPIO(bus_config->mosi_io_num), "mosi pin must be output capable in 3-wire mode", ESP_ERR_INVALID_ARG);
 
     SPIHD_CHECK(ESP_OK == spicommon_bus_alloc(host_id, "slave_hd"), "host already in use", ESP_ERR_INVALID_STATE);
     // spi_slave_hd_slot_t contains atomic variable, memory must be allocated from internal memory
@@ -170,9 +172,10 @@ esp_err_t spi_slave_hd_init(spi_host_device_t host_id, const spi_bus_config_t *b
         .host_id = host_id,
         .dma_enabled = true,
         .append_mode = append_mode,
+        .three_wire_mode = three_wire_mode,
         .mode = config->mode,
-        .tx_lsbfirst = (config->flags & SPI_SLAVE_HD_RXBIT_LSBFIRST),
-        .rx_lsbfirst = (config->flags & SPI_SLAVE_HD_TXBIT_LSBFIRST),
+        .tx_lsbfirst = (config->flags & SPI_SLAVE_HD_TXBIT_LSBFIRST),
+        .rx_lsbfirst = (config->flags & SPI_SLAVE_HD_RXBIT_LSBFIRST),
     };
 
     //Init the hal according to the hal_config set above
@@ -200,13 +203,20 @@ esp_err_t spi_slave_hd_init(spi_host_device_t host_id, const spi_bus_config_t *b
                 .arg = host,
             },
         },
+        .attribute = SLEEP_RETENTION_MODULE_ATTR_ATTACH,
         .depends = RETENTION_MODULE_BITMAP_INIT(CLOCK_SYSTEM),
     };
 
     if (ESP_OK == sleep_retention_module_init(spi_reg_retention_info[host_id - 1].module_id, &init_param)) {
-        if ((bus_config->flags & SPICOMMON_BUSFLAG_SLP_ALLOW_PD) && (sleep_retention_module_allocate(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK)) {
-            // even though the sleep retention create failed, SPI driver should still work, so just warning here
-            ESP_LOGW(TAG, "Alloc sleep recover failed, spi may hold power on");
+        if ((bus_config->flags & SPICOMMON_BUSFLAG_SLP_ALLOW_PD)) {
+            if (sleep_retention_module_allocate(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK) {
+                // even though the sleep retention create failed, SPI driver should still work, so just warning here
+                ESP_LOGW(TAG, "Alloc sleep recover failed, spi may hold power on");
+            } else {
+                if (sleep_retention_module_attach(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK) {
+                    ESP_LOGW(TAG, "attach sleep recover failed, spi may hold power on");
+                }
+            }
         }
     } else {
         // even the sleep retention init failed, SPI driver should still work, so just warning here
@@ -322,6 +332,7 @@ esp_err_t spi_slave_hd_deinit(spi_host_device_t host_id)
 
 #if SOC_SPI_SUPPORT_SLEEP_RETENTION && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP
     const periph_retention_module_t retention_id = spi_reg_retention_info[host_id - 1].module_id;
+    sleep_retention_module_detach(retention_id);
     if (sleep_retention_is_module_created(retention_id)) {
         assert(sleep_retention_is_module_inited(retention_id));
         sleep_retention_module_free(retention_id);

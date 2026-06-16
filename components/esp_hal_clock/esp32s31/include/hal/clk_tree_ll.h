@@ -153,6 +153,8 @@ static inline __attribute__((always_inline)) void clk_ll_mpll_enable(void)
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_1_REG, PMU_TIE_HIGH_GLOBAL_MPLL_ICG) ;
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_1_REG, PMU_TIE_HIGH_XPD_MPLL | PMU_TIE_HIGH_XPD_MPLL_I2C);
     SET_PERI_REG_MASK(HP_ALIVE_SYS_HP_CLK_CTRL_REG, HP_ALIVE_SYS_HP_MPLL_500M_CLK_EN);
+    SET_PERI_REG_MASK(PMU_HP_ACTIVE_HP_CK_POWER_REG, PMU_HP_ACTIVE_XPD_MPLL_I2C | PMU_HP_ACTIVE_XPD_MPLL);
+    SET_PERI_REG_MASK(PMU_PSRAM_CFG_REG, PMU_PSRAM_XPD);
 }
 
 /**
@@ -163,6 +165,8 @@ static inline __attribute__((always_inline)) void clk_ll_mpll_disable(void)
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_1_REG, PMU_TIE_LOW_GLOBAL_MPLL_ICG) ;
     SET_PERI_REG_MASK(PMU_IMM_HP_CK_POWER_1_REG, PMU_TIE_LOW_XPD_MPLL | PMU_TIE_LOW_XPD_MPLL_I2C);
     CLEAR_PERI_REG_MASK(HP_ALIVE_SYS_HP_CLK_CTRL_REG, HP_ALIVE_SYS_HP_MPLL_500M_CLK_EN);
+    CLEAR_PERI_REG_MASK(PMU_HP_ACTIVE_HP_CK_POWER_REG, PMU_HP_ACTIVE_XPD_MPLL_I2C | PMU_HP_ACTIVE_XPD_MPLL);
+    CLEAR_PERI_REG_MASK(PMU_PSRAM_CFG_REG, PMU_PSRAM_XPD);
 }
 
 /**
@@ -697,13 +701,16 @@ static inline __attribute__((always_inline)) uint32_t clk_ll_apb_get_divider(voi
     return HAL_FORCE_READ_U32_REG_FIELD(HP_SYS_CLKRST.apb_freq_ctrl0, reg_apb_clk_div_num) + 1;
 }
 
-// TODO: IDF-14730
-// static inline __attribute__((always_inline)) void clk_ll_ref_500m_set_src(soc_ref_500m_clk_src_t in_sel)
-// {
-//     // 0: cpll (320MHz)
-//     // 1: mpll (500MHz)
-//     HP_SYS_CLKRST.ref_500m_ctrl0.reg_ref_500m_sel = in_sel;
-// }
+/**
+ * @brief Select REF_500M_CLK source
+ *
+ * @param in_sel 0 selects CPLL (320 MHz), 1 selects MPLL (500 MHz).
+ */
+static inline __attribute__((always_inline)) void clk_ll_ref_500m_set_src(uint8_t in_sel)
+{
+    HAL_ASSERT(in_sel == 0 || in_sel == 1);
+    HP_SYS_CLKRST.ref_500m_ctrl0.reg_ref_500m_sel = in_sel;
+}
 
 /**
  * @brief Set PLL_F50M_CLK divider. freq of PLL_F50M_CLK = freq of MPLL_CLK / divider

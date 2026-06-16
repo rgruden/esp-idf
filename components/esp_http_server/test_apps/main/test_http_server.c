@@ -11,6 +11,12 @@
 #include <esp_heap_caps.h>
 #include <net/if.h>
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+#include "../../src/esp_httpd_priv.h"
+#endif
 
 #include "unity.h"
 #include "test_utils.h"
@@ -48,6 +54,25 @@ static httpd_uri_t handler_limit_ws_uri(char *path, const char *subprotocol)
         .supported_subprotocol = subprotocol,
     };
     return uri;
+}
+
+static int ws_recv_fail_handler_calls;
+
+static int ws_recv_fail_override(httpd_handle_t hd, int sockfd, char *buf, size_t buf_len, int flags)
+{
+    (void)hd;
+    (void)sockfd;
+    (void)buf;
+    (void)buf_len;
+    (void)flags;
+    return HTTPD_SOCK_ERR_FAIL;
+}
+
+static esp_err_t ws_counting_handler(httpd_req_t *req)
+{
+    (void)req;
+    ws_recv_fail_handler_calls++;
+    return ESP_OK;
 }
 #endif /* CONFIG_HTTPD_WS_SUPPORT */
 
@@ -401,6 +426,100 @@ TEST_CASE("httpd_resp_set_type rejects CRLF in content type", "[HTTP SERVER][sec
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG,
                       httpd_resp_set_type(&fake_req, "text/html\nX-Injected: pwned"));
 }
+
+/* ---- httpd_queue_work backpressure ---- */
+
+static SemaphoreHandle_t s_qw_gate;
+static volatile int s_qw_work_runs;
+
+static void qw_blocking_work(void *arg)
+{
+    /* Hold the httpd thread inside this work fn so the ctrl-socket mbox
+     * stops draining. Auto-release after 2 s as a safety net in case the
+     * test asserts mid-way and never reaches the explicit give. */
+    xSemaphoreTake((SemaphoreHandle_t)arg, pdMS_TO_TICKS(2000));
+}
+
+static void qw_counting_work(void *arg)
+{
+    (void)arg;
+    s_qw_work_runs++;
+}
+
+TEST_CASE("httpd_queue_work fast-fails on ctrl mbox saturation", "[HTTP SERVER]")
+{
+    test_case_uses_tcpip();
+
+    httpd_handle_t hd = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    TEST_ASSERT_EQUAL(ESP_OK, httpd_start(&hd, &config));
+
+    s_qw_gate = xSemaphoreCreateBinary();
+    TEST_ASSERT_NOT_NULL(s_qw_gate);
+    s_qw_work_runs = 0;
+
+    /* Park the httpd thread in a blocked work item so the mbox can fill. */
+    TEST_ASSERT_EQUAL(ESP_OK, httpd_queue_work(hd, qw_blocking_work, s_qw_gate));
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    /* Spam queue_work past the mbox cap; first ones succeed, rest must
+     * return ESP_FAIL synchronously (default non-blocking behavior). */
+    int ok_count = 0;
+    int fail_count = 0;
+    for (int i = 0; i < CONFIG_LWIP_UDP_RECVMBOX_SIZE * 2 + 4; i++) {
+        esp_err_t err = httpd_queue_work(hd, qw_counting_work, NULL);
+        if (err == ESP_OK) {
+            ok_count++;
+        } else {
+            TEST_ASSERT_EQUAL(ESP_FAIL, err);
+            fail_count++;
+        }
+    }
+    TEST_ASSERT_GREATER_THAN(0, ok_count);
+    TEST_ASSERT_LESS_OR_EQUAL(CONFIG_LWIP_UDP_RECVMBOX_SIZE, ok_count);
+    TEST_ASSERT_GREATER_THAN(0, fail_count);
+
+    /* Release the parked work; every accepted item must now actually run. */
+    xSemaphoreGive(s_qw_gate);
+    vTaskDelay(pdMS_TO_TICKS(300));
+    TEST_ASSERT_EQUAL(ok_count, s_qw_work_runs);
+
+    vSemaphoreDelete(s_qw_gate);
+    s_qw_gate = NULL;
+    TEST_ASSERT_EQUAL(ESP_OK, httpd_stop(hd));
+}
+
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+TEST_CASE("WS recv failure marks close without dispatching handler", "[HTTP SERVER][websocket]")
+{
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    struct httpd_data hd = {0};
+    struct sock_db session = {0};
+
+    hd.config = config;
+    hd.hd_req_aux.resp_hdrs = calloc(config.max_resp_headers, sizeof(*hd.hd_req_aux.resp_hdrs));
+    TEST_ASSERT_NOT_NULL(hd.hd_req_aux.resp_hdrs);
+
+    session.fd = 123;
+    session.handle = (httpd_handle_t) &hd;
+    session.recv_fn = ws_recv_fail_override;
+    session.ws_handshake_done = true;
+    session.ws_handler = ws_counting_handler;
+    session.ws_control_frames = false;
+    session.ws_close = false;
+
+    ws_recv_fail_handler_calls = 0;
+
+    esp_err_t ret = httpd_req_new(&hd, &session);
+
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(0, ws_recv_fail_handler_calls);
+    TEST_ASSERT_TRUE(session.ws_close);
+    TEST_ASSERT_EQUAL(HTTPD_WS_TYPE_CLOSE, hd.hd_req_aux.ws_type);
+
+    free(hd.hd_req_aux.resp_hdrs);
+}
+#endif /* CONFIG_HTTPD_WS_SUPPORT */
 
 void app_main(void)
 {

@@ -130,6 +130,31 @@ config BT_CTRL_BR_EDR_APB_EN
     help
         Enable BR/EDR Active Peripheral Broadcast
 
+config BT_CTRL_BR_EDR_APB_EXT_EN
+    bool "Enable BR/EDR Broadcast Encryption or Piconet Clock Adjustment"
+    select BT_CTRL_BR_EDR_APB_EN
+    default n
+    help
+        Enable BR/EDR Broadcast Encryption or Piconet Clock Adjustment
+
+choice BT_CTRL_BR_EDR_APB_EXT
+    prompt "Choice BR/EDR Broadcast Encryption or Piconet Clock Adjustment"
+    depends on BT_CTRL_BR_EDR_APB_EXT_EN
+    default BT_CTRL_BR_EDR_APB_EXT_PCA_EN
+    help
+        Enable BR/EDR Broadcast Encryption or Piconet Clock Adjustment
+
+    config BT_CTRL_BR_EDR_APB_EXT_BCST_ENC_EN
+        bool "Broadcast Encryption"
+        help
+            Enable BR/EDR Broadcast Encryption
+
+    config BT_CTRL_BR_EDR_APB_EXT_PCA_EN
+        bool "Piconet Clock Adjustment"
+        help
+            Enable BR/EDR Piconet Clock Adjustment
+endchoice
+
 config BT_CTRL_BR_EDR_CPB_TX_EN
     bool "Enable BR/EDR Connectionless Peripheral Broadcast Transimit"
     default n
@@ -142,11 +167,23 @@ config BT_CTRL_BR_EDR_CPB_RX_EN
     help
         Enable BR/EDR Connectionless Peripheral Broadcast Receive
 
+config BT_CTRL_BR_EDR_HOLD_EN
+    bool "Enable BR/EDR Hold Mode"
+    default n
+    help
+        Enable BR/EDR Hold Mode
+
 config BT_CTRL_BR_EDR_LK_STORE_EN
     bool "Enable BR/EDR controller link key storage"
     default n
     help
         Enable BR/EDR controller link key storage, only support store link key in RAM for now.
+
+config BT_CTRL_BR_EDR_DTM_EN
+    bool "Enable BR/EDR controller direct test mode"
+    default n
+    help
+        Enable BR/EDR controller direct test mode
 
 config BT_CTRL_BR_EDR_TX_CCA_ENABLED
     bool "Enable BR/EDR TX CCA feature"
@@ -166,14 +203,14 @@ menu "TX Power Level settings"
     config BT_CTRL_BR_EDR_TX_PWR_ACL_MIN
         int "Default minimum TX power level for ACL"
         default -13
-        range -15 20
+        range -24 12
         help
             Minimum BR/EDR transmission power level for ACL.
 
     config BT_CTRL_BR_EDR_TX_PWR_ACL_MAX
         int "Default maximum TX power level for ACL"
         default 4
-        range -15 20
+        range -24 12
         help
             Maximum BR/EDR transmission power level for ACL.
 
@@ -181,28 +218,28 @@ menu "TX Power Level settings"
         int "Default TX power level for APB"
         depends on BT_CTRL_BR_EDR_APB_EN
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for APB.
 
     config BT_CTRL_BR_EDR_TX_PWR_PAGE
         int "Default TX power level for Page"
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for Page.
 
     config BT_CTRL_BR_EDR_TX_PWR_PSCAN
         int "Default TX power level for Page Scan"
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for Page Scan.
 
     config BT_CTRL_BR_EDR_TX_PWR_ISCAN
         int "Default TX power level for Inquiry Scan"
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for Inquiry Scan.
 
@@ -210,7 +247,7 @@ menu "TX Power Level settings"
         int "Default TX power level for CPB"
         depends on BT_CTRL_BR_EDR_CPB_TX_EN
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for CPB.
 
@@ -218,7 +255,7 @@ menu "TX Power Level settings"
         int "Default TX power level for Synchronization Train"
         depends on BT_CTRL_BR_EDR_CPB_TX_EN
         default 4
-        range -15 20
+        range -24 12
         help
             BR/EDR transmission power level for Synchronization Train.
 endmenu

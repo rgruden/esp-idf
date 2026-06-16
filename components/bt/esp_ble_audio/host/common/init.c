@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdarg.h>
 #include <errno.h>
 
 #include "sdkconfig.h"
@@ -42,11 +44,21 @@
 #include <../host/conn_internal.h>
 #include <../host/hci_core.h>
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+#include "bluedroid/init.h"
+#else
 #include "nimble/init.h"
+#endif
 
 #include "../../../lib/include/audio.h"
 
 #include "esp_ble_audio_common_api.h"
+
+#if CONFIG_BLE_ISO_COMPRESSED_LOG_ENABLE
+#include "log_compression/utils.h"
+#endif
+
+LOG_MODULE_REGISTER(LEA_INIT, CONFIG_BT_ISO_LOG_LEVEL);
 
 _Static_assert(sizeof(struct bt_le_audio_start_info) ==
                sizeof(esp_ble_audio_start_info_t),
@@ -170,12 +182,13 @@ static const uint16_t ext_structs[] = {
     sizeof(struct bt_bond_info),
 };
 
-#define LEA_VERSION     (0x20260412)
+#define LEA_VERSION     (0x20260514)
 
 struct lib_ext_cfgs {
     /* BLE */
     bool     config_past_sender;
     bool     config_past_receiver;
+    bool     config_past_check;
     uint8_t  config_max_conn;
     uint8_t  config_max_paired;
     uint16_t config_max_attr_len;
@@ -431,6 +444,7 @@ static const struct lib_ext_cfgs ext_cfgs = {
     /* BLE */
     .config_past_sender = CONFIG_BT_PER_ADV_SYNC_TRANSFER_SENDER,
     .config_past_receiver = CONFIG_BT_PER_ADV_SYNC_TRANSFER_RECEIVER,
+    .config_past_check = false,
     .config_max_conn = CONFIG_BT_MAX_CONN,
     .config_max_paired = CONFIG_BT_MAX_PAIRED,
     .config_max_attr_len = 251,
@@ -963,6 +977,12 @@ struct lib_ext_funcs {
     void (*_log_wrn)(const char *format, ...);
     void (*_log_err)(const char *format, ...);
 
+    /* Fatal assert: log + abort with tag/info/file/line/func context.
+     * Mirrors lib-side lib_ext_funcs._assert in init.h. ABI must match.
+     */
+    void (*_assert)(const char *tag, size_t info,
+                    const char *file, int line, const char *func);
+
     /* Memory */
     void *(*_malloc)(size_t size);
     void *(*_calloc)(size_t n, size_t size);
@@ -1109,11 +1129,11 @@ struct lib_ext_funcs {
     void (*_ots_metadata_display)(void *metadata, uint16_t count);
 };
 
-#define LEA_TAG     "LIB"
+#define LEA_TAG     "LEA_LIB"
 
 static void log_debug(const char *format, ...)
 {
-#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_DEBUG)
+#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_DEBUG)
     va_list args;
 
     va_start(args, format);
@@ -1124,12 +1144,12 @@ static void log_debug(const char *format, ...)
     esp_log_write(ESP_LOG_INFO, LEA_TAG, BT_ISO_LOG_RESET_COLOR "\n");
 
     va_end(args);
-#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_DEBUG) */
+#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_DEBUG) */
 }
 
 static void log_info(const char *format, ...)
 {
-#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_INFO)
+#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_INFO)
     va_list args;
 
     va_start(args, format);
@@ -1139,12 +1159,12 @@ static void log_info(const char *format, ...)
     esp_log_write(ESP_LOG_INFO, LEA_TAG, BT_ISO_LOG_RESET_COLOR "\n");
 
     va_end(args);
-#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_INFO) */
+#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_INFO) */
 }
 
 static void log_warn(const char *format, ...)
 {
-#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_WARN)
+#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_WARN)
     va_list args;
 
     va_start(args, format);
@@ -1154,12 +1174,12 @@ static void log_warn(const char *format, ...)
     esp_log_write(ESP_LOG_WARN, LEA_TAG, BT_ISO_LOG_RESET_COLOR "\n");
 
     va_end(args);
-#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_WARN) */
+#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_WARN) */
 }
 
 static void log_error(const char *format, ...)
 {
-#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_ERROR)
+#if (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_ERROR)
     va_list args;
 
     va_start(args, format);
@@ -1169,7 +1189,23 @@ static void log_error(const char *format, ...)
     esp_log_write(ESP_LOG_ERROR, LEA_TAG, BT_ISO_LOG_RESET_COLOR "\n");
 
     va_end(args);
-#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_AUDIO_LOG_ERROR) */
+#endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_ERROR) */
+}
+
+/* Fatal assert handler registered into lib_ext_funcs._assert.
+ * Always logged (no LOG_LEVEL gate) — this is the last message before
+ * abort, and the user needs the context to diagnose.
+ */
+static void assert_fatal(const char *tag, size_t info,
+                         const char *file, int line, const char *func)
+{
+    esp_log_write(ESP_LOG_ERROR, LEA_TAG,
+                  BT_ISO_LOG_COLOR_E
+                  "E (%lu) %s: LibAssert[%s][info=%u][%s:%d][%s]"
+                  BT_ISO_LOG_RESET_COLOR "\n",
+                  esp_log_timestamp(), LEA_TAG,
+                  tag, (unsigned)info, file, line, func);
+    abort();
 }
 
 static const struct lib_ext_funcs ext_funcs = {
@@ -1177,6 +1213,8 @@ static const struct lib_ext_funcs ext_funcs = {
     ._log_inf = (void *)log_info,
     ._log_wrn = (void *)log_warn,
     ._log_err = (void *)log_error,
+
+    ._assert = (void *)assert_fatal,
 
     ._malloc = (void *)malloc,
     ._calloc = (void *)calloc,
@@ -2049,10 +2087,6 @@ int bt_le_audio_init(void)
         return err;
     }
 
-#if 0
-    lib_dymem_size_init();
-#endif
-
     printf(BT_ISO_LOG_COLOR_I "BLE Audio lib commit: [%s]" \
            BT_ISO_LOG_RESET_COLOR "\n", lib_ext_commit_get());
 
@@ -2061,16 +2095,24 @@ int bt_le_audio_init(void)
         return err;
     }
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_audio_init();
+#else
     return bt_le_nimble_audio_init();
+#endif
 }
 
-#if BLE_AUDIO_SVC_SEP_ADD
+#if BLE_AUDIO_SVC_DEFERRED_ADD
 #if CONFIG_BT_ASCS
 int bt_le_ascs_init(void)
 {
     LOG_DBG("AscsInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_ascs_init();
+#else
     return bt_le_nimble_ascs_init();
+#endif
 }
 #endif /* CONFIG_BT_ASCS */
 
@@ -2079,7 +2121,11 @@ int bt_le_bass_init(void)
 {
     LOG_DBG("BassInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_bass_init();
+#else
     return bt_le_nimble_bass_init();
+#endif
 }
 #endif /* CONFIG_BT_BAP_SCAN_DELEGATOR */
 
@@ -2088,7 +2134,11 @@ int bt_le_tmas_init(void)
 {
     LOG_DBG("TmasInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_tmas_init();
+#else
     return bt_le_nimble_tmas_init();
+#endif
 }
 #endif /* CONFIG_BT_TMAP */
 
@@ -2097,7 +2147,11 @@ int bt_le_gtbs_init(void)
 {
     LOG_DBG("GtbsInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_gtbs_init();
+#else
     return bt_le_nimble_gtbs_init();
+#endif
 }
 #endif /* CONFIG_BT_TBS */
 
@@ -2106,7 +2160,11 @@ int bt_le_has_init(void)
 {
     LOG_DBG("HasInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_has_init();
+#else
     return bt_le_nimble_has_init();
+#endif
 }
 #endif /* CONFIG_BT_HAS */
 
@@ -2115,7 +2173,11 @@ int bt_le_media_proxy_pl_init(void)
 {
     LOG_DBG("MprxPlInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_media_proxy_pl_init();
+#else
     return bt_le_nimble_media_proxy_pl_init();
+#endif
 }
 #endif /* CONFIG_BT_MCS */
 
@@ -2124,7 +2186,11 @@ int bt_le_vcp_vol_rend_init(void)
 {
     LOG_DBG("VcpVolRendInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_vcp_vol_rend_init();
+#else
     return bt_le_nimble_vcp_vol_rend_init();
+#endif
 }
 #endif /* CONFIG_BT_VCP_VOL_REND */
 
@@ -2133,14 +2199,61 @@ int bt_le_micp_mic_dev_init(void)
 {
     LOG_DBG("MicpMicDevInit");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_micp_mic_dev_init();
+#else
     return bt_le_nimble_micp_mic_dev_init();
+#endif
 }
 #endif /* CONFIG_BT_MICP_MIC_DEV */
-#endif /* BLE_AUDIO_SVC_SEP_ADD */
+#endif /* BLE_AUDIO_SVC_DEFERRED_ADD */
 
 int bt_le_audio_start(void *info)
 {
     LOG_DBG("AudioStart");
 
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_audio_start(info);
+#else
     return bt_le_nimble_audio_start(info);
+#endif
+}
+
+void ble_audio_lib_compressed_out(uint8_t log_level, uint32_t log_index, size_t arg_cnt, ...)
+{
+#if CONFIG_BLE_ISO_COMPRESSED_LOG_ENABLE
+    if (CONFIG_BT_ISO_LOG_LEVEL >= log_level) {
+        va_list args;
+        va_start(args, arg_cnt);
+        extern int ble_log_compressed_hex_printv(uint8_t source, uint32_t log_index,
+                                                 size_t args_cnt, va_list args);
+        ble_log_compressed_hex_printv(BLE_COMPRESSED_LOG_OUT_SOURCE_AUDIO_LIB,
+                                      log_index, arg_cnt, args);
+        va_end(args);
+    }
+#else
+    (void)log_level;
+    (void)log_index;
+    (void)arg_cnt;
+#endif
+}
+
+void ble_audio_lib_compressed_buf_out(uint8_t log_level, uint32_t log_index, uint8_t buf_idx,
+                                      const uint8_t *buf, size_t len)
+{
+#if CONFIG_BLE_ISO_COMPRESSED_LOG_ENABLE
+    if (CONFIG_BT_ISO_LOG_LEVEL >= log_level) {
+        extern int ble_log_compressed_hex_print_buf(uint8_t source, uint32_t log_index,
+                                                    uint8_t buf_idx, const uint8_t *buf,
+                                                    size_t len);
+        ble_log_compressed_hex_print_buf(BLE_COMPRESSED_LOG_OUT_SOURCE_AUDIO_LIB,
+                                         log_index, buf_idx, buf, len);
+    }
+#else
+    (void)log_level;
+    (void)log_index;
+    (void)buf_idx;
+    (void)buf;
+    (void)len;
+#endif
 }

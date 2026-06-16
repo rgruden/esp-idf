@@ -4,6 +4,30 @@
   tags: [fast_run, shiny]
   dependencies: # set dependencies to null to avoid missing artifacts issue
 
+####################
+# fast_build_check #
+####################
+
+# Build one config per target at earliest stage to catch obvious failures before the full build
+fast_build_check:
+  extends:
+    - .build_template
+    - .rules:build
+  stage: pre_check
+  tags: [fast_run, shiny]
+  artifacts:
+    paths:
+      - "**/build*/build_log.txt"
+      - "**/build*/size*.json"
+    expire_in: 1 week
+    when: always
+  script:
+    - export PATH="$IDF_PATH/tools:$PATH"
+    - idf-build-apps build
+        -p tools/test_apps/system/build_tests/full_build
+        --config-rules "sdkconfig.ci.Og="
+        --default-build-targets esp32 esp32s2 esp32s3 esp32c2 esp32c3 esp32c5 esp32c6 esp32h2 esp32p4 esp32c61 esp32h21 esp32h4 esp32s31
+
 check_version:
   # Don't run this for feature/bugfix branches, so that it is possible to modify
   # esp_idf_version.h in a branch before tagging the next version.
@@ -88,19 +112,15 @@ check_chip_support_components:
     - find ${IDF_PATH}/components/soc \( -path "*/include/soc/*_struct.h" -o -path "*/register/soc/*_struct.h" -o -path "*/register/*/soc/*_struct.h" \) -print0 | xargs -0 -n1 ./tools/ci/check_soc_struct_headers.py
     - tools/ci/check_esp_memory_utils_headers.sh
 
-check_esp_err_to_name:
+check_esp_err_codes:
   extends:
     - .pre_check_template
     - .rules:build:check
-  artifacts:
-    when: on_failure
-    paths:
-      - components/esp_common/esp_err_to_name.c
-    expire_in: 1 week
   script:
-    - cd ${IDF_PATH}/tools/
-    - ./gen_esp_err_to_name.py
-    - git diff --exit-code -- ../components/esp_common/src/esp_err_to_name.c || { echo 'Differences found. Please run gen_esp_err_to_name.py and commit the changes.'; exit 1; }
+    - cd ${IDF_PATH}
+    - python tools/err_codes_extract.py --search-dirs components/ --output /tmp/err_codes.csv --validate
+    - python tools/err_codes_to_rst.py --csv /tmp/err_codes.csv --output /tmp/esp_err_defs.inc
+    - echo "Extracted $(wc -l < /tmp/err_codes.csv) error codes"
 
 check_esp_system:
   extends:

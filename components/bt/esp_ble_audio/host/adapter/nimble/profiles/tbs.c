@@ -21,11 +21,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_TBS, CONFIG_BT_ISO_LOG_LEVEL);
 
 static const struct ble_gatt_svc_def gatt_svc_gtbs[] =  {
     {
@@ -163,21 +165,25 @@ static const struct ble_gatt_svc_def gatt_svc_gtbs[] =  {
 int bt_le_nimble_gtbs_attr_handle_set(void)
 {
     struct bt_gatt_service *gtbs_svc;
-    uint16_t handle;
+    uint16_t handle = 0;
     int rc;
 
-    gtbs_svc = lib_gtbs_svc_get();
-    assert(gtbs_svc);
-
-    LOG_DBG("[N]GtbsAttrHdlSet[%u]", gtbs_svc->attr_count);
-
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
     rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_GTBS_VAL), &handle);
     if (rc) {
-        LOG_ERR("[N]GtbsNotFound[%d]", rc);
-        return rc;
+        LOG_DBG("[N]GtbsNotInit");
+        return 0;
     }
 
-    LOG_DBG("[N]Hdl[%u]", handle);
+    gtbs_svc = lib_gtbs_svc_get();
+    if (!gtbs_svc) {
+        LOG_ERR("[N]GtbsSvcGetFail");
+        return -ENODEV;
+    }
+
+    LOG_DBG("[N]GtbsAttrHdlSet[%u][%u]", handle, gtbs_svc->attr_count);
 
     for (size_t i = 0; i < gtbs_svc->attr_count; i++) {
         (gtbs_svc->attrs + i)->handle = handle + i;
@@ -197,7 +203,10 @@ static int gtbs_svc_check(void)
      */
 
     gtbs_svc = lib_gtbs_svc_get();
-    assert(gtbs_svc);
+    if (!gtbs_svc) {
+        LOG_ERR("[N]GtbsSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]GtbsSvcCheck");
 

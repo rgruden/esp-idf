@@ -221,9 +221,29 @@ ESP-IDF 启动过程中，片外 RAM 被映射到数据虚拟地址空间，该�
 
     - 片外 RAM 与片外 flash 使用相同的 cache 区域，这意味着频繁在片外 RAM 访问的变量可以像在片上 RAM 中一样快速读取和修改。但访问大块数据时（大于 32 KB），cache 空间可能会不足，访问速度将降低到片外 RAM 的访问速度。此外，访问大块数据会挤出 flash cache，可能在之后降低代码的执行速度。
 
-    - 一般来说，片外 RAM 不会用作任务堆栈存储器。:cpp:func:`xTaskCreate` 及类似函数始终会为堆栈和任务 TCB 分配片上储存器。
+    - 一般来说，片外 RAM 不会用作任务堆栈存储器。:cpp:func:`xTaskCreate` 及类似函数始终会为堆栈和任务 TCB 分配片上储存器。任务堆栈也可选择放入片外 RAM——详见下方 :ref:`task-stack-in-external-ram`。
 
-可以使用 :ref:`CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM` 选项将任务堆栈放入片外存储器。这时，必须使用 :cpp:func:`xTaskCreateStatic` 指定从片外存储器分配的任务堆栈缓冲区，否则任务堆栈将仍从片上存储器分配。
+.. _task-stack-in-external-ram:
+
+将任务堆栈放入片外存储器
+-------------------------------
+
+有三种方式可将任务堆栈放入片外 RAM：
+
+1. **单任务（显式）** – 使用 ``MALLOC_CAP_SPIRAM`` 标志调用 :cpp:func:`xTaskCreateWithCaps`。需要启用 :ref:`CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM`。
+
+2. **单任务（静态）** – 使用 :cpp:func:`xTaskCreateStatic`，提供位于片外 RAM 的调用方自定义缓冲区。需要启用 :ref:`CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM`。
+
+3. **全局默认（自动）** – 启用 :ref:`CONFIG_FREERTOS_PLACE_TASK_STACKS_IN_EXT_RAM`。启用后，:cpp:func:`xTaskCreate` / :cpp:func:`xTaskCreatePinnedToCore` 的每次调用都会优先从 PSRAM 分配任务堆栈，若 PSRAM 耗尽则回退到片上 RAM。TCB 始终保留在片上 DRAM 中。
+
+启用 :ref:`CONFIG_FREERTOS_PLACE_TASK_STACKS_IN_EXT_RAM` 后，还需注意以下额外限制：
+
+- **Flash 操作** – 任何会暂时禁用 CPU cache 的代码路径（flash 擦除/写入、NVS、OTA）必须在堆栈位于片上 RAM 的任务中运行，或通过 `espressif/esp_flash_dispatcher <https://components.espressif.com/components/espressif/esp_flash_dispatcher>`__ 组件路由，该组件会在专用片上 RAM 任务中执行 flash 操作。
+- **深度睡眠** – 从堆栈位于 PSRAM 的任务中调用 :cpp:func:`esp_deep_sleep_start` 会记录错误日志并继续执行，但在睡眠过程中禁用 cache 时极有可能发生崩溃。建议改用 :cpp:func:`esp_deep_sleep_try_to_start`：当从 PSRAM 堆栈任务中调用时，该函数会返回 :c:macro:`ESP_ERR_NOT_ALLOWED` 而不会崩溃。若应用程序需要深度睡眠，请从堆栈位于片上 RAM 的任务中发起调用。
+- **浅睡眠** – 从堆栈位于 PSRAM 的任务中直接调用 :cpp:func:`esp_light_sleep_start` 同样会返回 :c:macro:`ESP_ERR_NOT_ALLOWED`。Tickless idle 自动浅睡眠是安全的，因为它由 idle 任务发起，而 idle 任务的堆栈始终位于片上 RAM；堆栈在 PSRAM 中的任务在唤醒后可正常恢复执行。
+- **pthread** – :cpp:func:`pthread_create` 委托给 :cpp:func:`xTaskCreate`，因此启用此选项后，pthread 堆栈也会移至 PSRAM。
+
+相关演示请参考 :example:`system/freertos/psram_stack` 示例。
 
 
 初始化失败
@@ -239,7 +259,7 @@ ESP-IDF 启动过程中，片外 RAM 被映射到数据虚拟地址空间，该�
 .. only:: not esp32
 
     加密
-    ==========
+    ====
 
     可以为存储在外部 RAM 中的数据启用自动加密功能。启用该功能后，通过缓存读写的任何数据将被外部存储器加密硬件自动加密、解密。
 
@@ -248,6 +268,30 @@ ESP-IDF 启动过程中，片外 RAM 被映射到数据虚拟地址空间，该�
     .. only:: SOC_PSRAM_ENCRYPTION_PAGE_CONFIGURABLE
 
         在 {IDF_TARGET_NAME} 上，PSRAM 加密可以按 MMU 页面粒度进行控制，允许对单个 PSRAM 页面选择性地加密或不加密。但在默认配置下，启用 flash 加密时所有 PSRAM 页面都会被加密。
+
+        预留未加密的 PSRAM 区域
+        -----------------------
+
+        启用 :ref:`CONFIG_SPIRAM_ENC_EXEMPT` 会在 PSRAM 上端（最高物理地址区，大小由 :ref:`CONFIG_SPIRAM_ENC_EXEMPT_SIZE` 指定，单位为 KB，向上取整到 MMU 页面大小）预留一段区域，该区域在映射时不启用加密。此区域被注册为一个独立的堆池，仅可通过 ``MALLOC_CAP_SPIRAM_NO_ENC`` 能力位访问。其余 PSRAM（以及 flash）仍然保持加密。
+
+        .. warning::
+
+            通过 ``MALLOC_CAP_SPIRAM_NO_ENC`` 分配的内存以明文形式存储在 PSRAM 中，攻击者若能物理接触 PSRAM 接口即可读取其内容。切勿将 TLS 状态、密钥或其他敏感数据放入该区域。
+
+        典型使用场景：PSRAM 加密会对缓冲区施加对齐约束，部分 DMA 引擎（如 2D-DMA）无法满足这些约束。需要被此类引擎进行 DMA 访问的缓冲区可以从该未加密区域分配：
+
+        .. code-block:: c
+
+            #if CONFIG_SPIRAM_ENC_EXEMPT
+            uint32_t caps = MALLOC_CAP_SPIRAM_NO_ENC;
+            #else
+            uint32_t caps = MALLOC_CAP_SPIRAM;
+            #endif
+            uint8_t *buf = heap_caps_malloc(buf_size, caps);
+
+        必须显式请求 ``MALLOC_CAP_SPIRAM_NO_ENC``。该能力位有意未与 ``MALLOC_CAP_SPIRAM`` 或 ``MALLOC_CAP_DEFAULT`` 组合，因此普通 SPIRAM/堆分配不会意外落入该未加密区域。
+
+        如需在分配后验证缓冲区是否确实位于未加密的预留区域（例如调用 ``heap_caps_malloc_prefer()`` 后可能回退到加密的 PSRAM），可使用 ``esp_psram_ptr_is_no_enc()``。
 
     .. only:: SOC_PSRAM_ENCRYPTION_SEPARATE_KEY
 

@@ -1,6 +1,6 @@
 # For the syntax of this file, see:
 #
-#    https://docs.gitlab.com/ee/user/project/code_owners.html#the-syntax-of-code-owners-files
+#    https://docs.gitlab.com/user/project/codeowners/reference/
 #
 # If more than one rule matches a given file, the latest rule is used.
 # The file should be generally kept sorted, except when it is necessary
@@ -249,8 +249,6 @@
 /tools/tools.json             @esp-idf-codeowners/tools @esp-idf-codeowners/toolchain @esp-idf-codeowners/debugging
 
 # sort-order-reset
-
-/components/**/test_apps/**/*.py     @esp-idf-codeowners/ci @esp-idf-codeowners/tools
 
 # ignore lists
 /tools/ci/check_copyright_config.yaml                   @esp-idf-codeowners/all-maintainers

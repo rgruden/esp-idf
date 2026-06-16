@@ -73,6 +73,8 @@
 #define SDP_INCLUDED                TRUE
 #define BTA_DM_QOS_INCLUDED         TRUE
 
+#define BR_EDR_MAX_RECONNECT_ON_COLLISION UC_BT_CLASSIC_MAX_RECONNECT_ON_COLLISION
+
 #define ENC_KEY_SIZE_CTRL_MODE_NONE 0
 #define ENC_KEY_SIZE_CTRL_MODE_STD  1
 #define ENC_KEY_SIZE_CTRL_MODE_VSC  2
@@ -97,6 +99,11 @@
 #else
 #define SBC_DEC_INCLUDED            TRUE
 #define SBC_ENC_INCLUDED            TRUE
+#endif
+#if (UC_BT_A2DP_CODEC_AAC_ENABLED == TRUE)
+#define BTC_AV_CODEC_AAC_INCLUDED   TRUE
+#define BTA_AV_CODEC_AAC_INCLUDED   TRUE
+#define A2D_AV_CODEC_AAC_INCLUDED   TRUE
 #endif
 #if UC_BT_AVRCP_CT_COVER_ART_ENABLED
 #define BTA_AV_CA_INCLUDED          TRUE
@@ -460,28 +467,21 @@
 #define BLE_HIGH_DUTY_ADV_INTERVAL FALSE
 #endif
 
-/* Minimum BLE connection interval (in 1.25 ms units) enforced by the Bluedroid
- * host parameter validation.
+/* Host-side parameter validation floor (in 1.25 ms units) for the BLE
+ * connection interval. Internal to the Bluedroid host: not sent on air, not
+ * exposed via the GATT Preferred Connection Parameters Characteristic, and
+ * not a public API constant - those use BTM_BLE_CONN_INT_MIN (0x0006).
  *
- *   - When host-side validation keeps the Core Spec floor: 0x0006 (7.5 ms).
- *   - When validation is relaxed for sub-spec intervals: 0x0001 (1.25 ms) so
- *     host-side checks no longer enforce the Core Spec minimum; whether a
- *     smaller connection interval is allowed and the real lower limit depend
- *     entirely on Controller capability and its own configuration (option
- *     names differ by Controller). Whether the relaxed mode is used is
- *     determined by how the Host is integrated with the Controller for each
- *     product, not documented here.
- *
- * Note: the relaxed lower bound is 0x0001 rather than 0x0000 so that all
- * existing `uint16_t < MIN` / `uint16_t >= MIN` range checks in the stack
- * remain well-defined under GCC `-Wtype-limits`. Since 0 is not a valid HCI
- * connection interval anyway, this is functionally equivalent to disabling
- * the host-side minimum check. */
-#ifndef BLE_CONN_INT_MIN_HW
+ * When UC_BT_BLE_HOST_ALLOW_SUB_SPEC_MIN_CONN_INT == 1 the host stops
+ * enforcing a minimum (the actual lower limit is then defined entirely by
+ * the controller). 0x0001 is used rather than 0x0000 so the existing
+ * `uint16_t < MIN` range checks remain well-defined under GCC
+ * `-Wtype-limits`. */
+#ifndef BLE_CONN_INT_MIN_HOST_CHECK
 #if (UC_BT_BLE_HOST_ALLOW_SUB_SPEC_MIN_CONN_INT == 1)
-#define BLE_CONN_INT_MIN_HW             0x0001
+#define BLE_CONN_INT_MIN_HOST_CHECK             0x0001
 #else
-#define BLE_CONN_INT_MIN_HW             0x0006
+#define BLE_CONN_INT_MIN_HOST_CHECK             0x0006
 #endif
 #endif
 
@@ -2306,7 +2306,7 @@
 
 /* Number of simultaneous stream endpoints. */
 #ifndef AVDT_NUM_SEPS
-#define AVDT_NUM_SEPS               3
+#define AVDT_NUM_SEPS               UC_BT_A2DP_SEP_NUM_MAX
 #endif
 
 /* Number of transport channels setup per media stream(audio or video) */

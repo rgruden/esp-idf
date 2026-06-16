@@ -23,11 +23,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_ASCS, CONFIG_BT_ISO_LOG_LEVEL);
 
 static const ble_uuid16_t ascs_uuid_ase_cp = BLE_UUID16_INIT(BT_UUID_ASCS_ASE_CP_VAL);
 static const ble_uuid16_t ascs_uuid_ase_snk = BLE_UUID16_INIT(BT_UUID_ASCS_ASE_SNK_VAL);
@@ -106,11 +108,24 @@ int bt_le_nimble_ascs_attr_handle_set(void)
 {
     struct bt_gatt_service *ascs_svc;
     struct bt_gatt_attr *attr;
-    uint16_t start_handle;
-    uint16_t end_handle;
+    uint16_t start_handle = 0;
+    uint16_t end_handle = 0;
+    int rc;
+
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
+    rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_ASCS_VAL), NULL);
+    if (rc) {
+        LOG_DBG("[N]AscsNotInit");
+        return 0;
+    }
 
     ascs_svc = lib_ascs_svc_get();
-    assert(ascs_svc);
+    if (!ascs_svc) {
+        LOG_ERR("[N]AscsSvcGetFail");
+        return -ENODEV;
+    }
 
     assert(ase_control_point_handle >= 2);
     start_handle = ase_control_point_handle - 2;    /* server attr handle & char def handle */
@@ -152,7 +167,10 @@ static int ascs_svc_check(void)
      */
 
     ascs_svc = lib_ascs_svc_get();
-    assert(ascs_svc);
+    if (!ascs_svc) {
+        LOG_ERR("[N]AscsSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]AscsSvcCheck");
 

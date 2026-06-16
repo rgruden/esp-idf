@@ -23,11 +23,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_MICS, CONFIG_BT_ISO_LOG_LEVEL);
 
 #define INC_AICS_CHR_COUNT  (6 + 1)
 
@@ -157,7 +159,10 @@ static int mics_svc_check(void)
     bool chr_found;
 
     mics_svc = lib_mics_svc_get();
-    assert(mics_svc);
+    if (!mics_svc) {
+        LOG_ERR("[N]MicsSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]MicsSvcCheck");
 
@@ -232,20 +237,25 @@ int bt_le_nimble_mics_attr_handle_set(void)
     uint16_t end_handle = 0;
     int rc;
 
-    mics_svc = lib_mics_svc_get();
-    assert(mics_svc);
-
-    LOG_DBG("[N]MicsAttrHdlSet[%u]", mics_svc->attr_count);
-
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
     rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_MICS_VAL), &start_handle);
     if (rc) {
-        LOG_ERR("[N]MicsNotFound[%d]", rc);
-        return rc;
+        LOG_DBG("[N]MicsNotInit");
+        return 0;
+    }
+
+    mics_svc = lib_mics_svc_get();
+    if (!mics_svc) {
+        LOG_ERR("[N]MicsSvcGetFail");
+        return -ENODEV;
     }
 
     end_handle = start_handle + mics_svc->attr_count - 1;
 
-    LOG_DBG("[N]Hdl[%u][%u]", start_handle, end_handle);
+    LOG_DBG("[N]MicsAttrHdlSet[%u][%u][%u]",
+            start_handle, end_handle, mics_svc->attr_count);
 
     for (size_t i = 0; i < mics_svc->attr_count; i++) {
         (mics_svc->attrs + i)->handle = start_handle + i;
@@ -375,6 +385,11 @@ int bt_le_nimble_mics_init(void *micp_inc)
                 inc_aics_svc_init(&inc_aics_insts[i], &gatt_svc_inc_aics[i]);
 
                 inc_aics_insts[i].svc_p = lib_aics_svc_get(micp_included->aics[i]);
+                if (!inc_aics_insts[i].svc_p) {
+                    LOG_ERR("[N]AicsSvcGetFail[%u]", i);
+                    rc = -ENODEV;
+                    goto free;
+                }
 
                 mics_inc_svcs[i] = &gatt_svc_inc_aics[i];
             }

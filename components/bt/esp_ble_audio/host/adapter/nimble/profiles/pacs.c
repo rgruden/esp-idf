@@ -21,11 +21,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_PACS, CONFIG_BT_ISO_LOG_LEVEL);
 
 #if CONFIG_BT_PAC_SNK
 static uint16_t pacs_snk_handle;
@@ -160,11 +162,14 @@ int bt_le_nimble_pacs_attr_handle_set(void)
 {
     struct bt_gatt_service *pacs_svc;
     struct bt_gatt_attr *attr;
-    uint16_t start_handle;
-    uint16_t end_handle;
+    uint16_t start_handle = 0;
+    uint16_t end_handle = 0;
 
     pacs_svc = lib_pacs_svc_get();
-    assert(pacs_svc);
+    if (!pacs_svc) {
+        LOG_ERR("[N]PacsSvcGetFail");
+        return -ENODEV;
+    }
 
 #if CONFIG_BT_PAC_SNK
     assert(pacs_snk_handle >= 2);
@@ -212,7 +217,10 @@ static int pacs_svc_check(void)
      */
 
     pacs_svc = lib_pacs_svc_get();
-    assert(pacs_svc);
+    if (!pacs_svc) {
+        LOG_ERR("[N]PacsSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]PacsSvcCheck");
 

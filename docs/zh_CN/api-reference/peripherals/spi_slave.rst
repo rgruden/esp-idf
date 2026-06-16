@@ -101,7 +101,7 @@ SPI 传输事务
 
     如果传输事务的数据大于 32 字节，需要在主机上设置参数 ``dma_chan`` 以使能 DMA 通道。若数据小于 32 字节，则应将 ``dma_chan`` 设为 ``0``。
 
-- 传输事务开始前，需用要求的事务参数填充一个或多个 :cpp:type:`spi_slave_transaction_t` 结构体。可以通过调用函数 :cpp:func:`spi_slave_queue_trans` 来将所有传输事务排进队列，并在稍后使用函数 :cpp:func:`spi_slave_get_trans_result` 查询结果；也可以将所有请求输入 :cpp:func:`spi_slave_transmit` 中单独处理。主机上的传输事务完成前，后两个函数将被阻塞，以便发送并接收队列中的数据。
+- 传输事务开始前，需用要求的事务参数填充一个或多个 :cpp:type:`spi_slave_transaction_t` 结构体。可以通过调用函数 :cpp:func:`spi_slave_queue_trans` 来将所有传输事务排进队列，并在稍后使用函数 :cpp:func:`spi_slave_get_trans_result` 查询结果；也可以将所有请求输入 :cpp:func:`spi_slave_transmit` 中单独处理。后两个函数将阻塞，直到主机发起并完成传输事务，以便发送并接收队列中的数据，或直到 ``ticks_to_wait`` 超时。
 
 - （可选）启用/禁用驱动程序功能：从机驱动程序支持在程序初始化后通过调用 :cpp:func:`spi_slave_disable` / :cpp:func:`spi_slave_enable` 来禁用/启用驱动程序，以便能够更改时钟或电源配置或休眠以节省电量。默认情况下，驱动程序在初始化后为“启用”状态。
 
@@ -116,6 +116,8 @@ SPI 传输事务
 驱动程序可以读取或写入缓存区的数据量取决于 :cpp:member:`spi_slave_transaction_t::length`，但其并不会定义一次 SPI 传输的实际长度。传输事务的长度由主机的时钟线和 CS 线决定，且只有在传输事务完成后，才能从 :cpp:member:`spi_slave_transaction_t::trans_len` 中读取实际长度。
 
 如果传输长度超过缓存区长度，则只有在 :cpp:member:`spi_slave_transaction_t::length` 中指定的初始比特数会被发送和接收。此时， :cpp:member:`spi_slave_transaction_t::trans_len` 被设置为 :cpp:member:`spi_slave_transaction_t::length` 而非实际传输事务长度。若需满足实际传输事务长度的要求，请将 :cpp:member:`spi_slave_transaction_t::length` 设置为大于 :cpp:member:`spi_slave_transaction_t::trans_len` 预期最大值的值。如果传输长度短于缓存区长度，则只传输与缓存区长度相等的数据。
+
+当需要在一次传输中单独指定不同的 TX/RX 长度时，可以使用 :cpp:member:`spi_slave_transaction_t::tx_length` 和 :cpp:member:`spi_slave_transaction_t::rx_length` 来分别指定 TX 和 RX 的长度。该配置和 :cpp:member:`spi_slave_transaction_t::length` 互斥，不可同时使用。
 
 GPIO 交换矩阵和 IO_MUX
 ----------------------

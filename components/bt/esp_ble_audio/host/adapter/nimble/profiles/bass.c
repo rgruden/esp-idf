@@ -23,11 +23,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_BASS, CONFIG_BT_ISO_LOG_LEVEL);
 
 static const ble_uuid16_t bass_uuid_control_point = BLE_UUID16_INIT(BT_UUID_BASS_CONTROL_POINT_VAL);
 static const ble_uuid16_t bass_uuid_recv_state = BLE_UUID16_INIT(BT_UUID_BASS_RECV_STATE_VAL);
@@ -82,11 +84,24 @@ int bt_le_nimble_bass_attr_handle_set(void)
 {
     struct bt_gatt_service *bass_svc;
     struct bt_gatt_attr *attr;
-    uint16_t start_handle;
-    uint16_t end_handle;
+    uint16_t start_handle = 0;
+    uint16_t end_handle = 0;
+    int rc;
+
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
+    rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_BASS_VAL), NULL);
+    if (rc) {
+        LOG_DBG("[N]BassNotInit");
+        return 0;
+    }
 
     bass_svc = lib_bap_bass_svc_get();
-    assert(bass_svc);
+    if (!bass_svc) {
+        LOG_ERR("[N]BassSvcGetFail");
+        return -ENODEV;
+    }
 
     assert(bass_control_point_handle >= 2);
     start_handle = bass_control_point_handle - 2;     /* server attr handle & char def handle */
@@ -122,7 +137,10 @@ static int bass_svc_check(void)
      */
 
     bass_svc = lib_bap_bass_svc_get();
-    assert(bass_svc);
+    if (!bass_svc) {
+        LOG_ERR("[N]BassSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]BassSvcCheck");
 

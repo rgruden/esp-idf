@@ -278,36 +278,36 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "88910c21350c06a521f243304d1a3adbdb78447123b3f8e27493aab75e3cc07f",
-            "size": 339870496,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-x86_64-linux-gnu.tar.xz"
+            "sha256": "6e62bf1973b57b5388aad281ce1463e953e70b3d8df74ef4668c70f31fbeda63",
+            "size": 416927952,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-x86_64-linux-gnu.tar.xz"
           },
           "linux-arm64": {
-            "sha256": "41f536fdee22527011d89e416b301648afd9f738d03e1c62f2b27e36ec395c4c",
-            "size": 319722760,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-aarch64-linux-gnu.tar.xz"
+            "sha256": "a25e5446ba3aa4bccfafa4328cec240c5b1ae7638978d868c26777c4ceca241b",
+            "size": 371652712,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-aarch64-linux-gnu.tar.xz"
           },
           "linux-armhf": {
-            "sha256": "7b695e88e21ba8a503d504f940dd34a7e4d3e98605c856b6836eec9117a5be94",
-            "size": 323395316,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-arm-linux-gnueabihf.tar.xz"
+            "sha256": "dea30c6e3548aea856e047727054b8d9fe91dcf19dbb76ae426951a8bc7d960e",
+            "size": 383104848,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-arm-linux-gnueabihf.tar.xz"
           },
           "macos": {
-            "sha256": "7dca85cd594185d8f9cf76f7e0c3420ee07057c1538b0016d8342677463f9ade",
-            "size": 303055152,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-x86_64-apple-darwin.tar.xz"
+            "sha256": "0096cbd1713b226bb403b19547003918943ec3294481d2a69c1596c9597f1ba5",
+            "size": 362965152,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-x86_64-apple-darwin.tar.xz"
           },
           "macos-arm64": {
-            "sha256": "85ff833a326593df376010a2aa18d6aa444f239c1dfed604e13502d00c19db30",
-            "size": 278008728,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-aarch64-apple-darwin.tar.xz"
+            "sha256": "b04a345c7b4125400e4de78734cece01147e0cc43b57aeef846ef3b8ff57ef7d",
+            "size": 340183960,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-aarch64-apple-darwin.tar.xz"
           },
-          "name": "esp-20.1.1_20250829",
+          "name": "esp-21.1.3_20260408",
           "status": "recommended",
           "win64": {
-            "sha256": "f40d7fa0efa399d129b675585355a7ef42a3492188d743e8e089b6038fcc0da1",
-            "size": 365038604,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/clang-esp-20.1.1_20250829-x86_64-w64-mingw32.tar.xz"
+            "sha256": "415566ace6f47a9abc302b4ba79776d27668fd3f4e9c0d26861ec4f970323618",
+            "size": 426383328,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clang-esp-21.1.3_20260408-x86_64-w64-mingw32.tar.xz"
           }
         }
       ]
@@ -342,36 +342,36 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "0128e2a86b262e3edfce026034ede07e2f45732b10c6cb8ac522c8f4c72befd8",
-            "size": 79625368,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-x86_64-linux-gnu.tar.xz"
+            "sha256": "c75406f5f0a1fe9692cdf6e6628cbbdf3f25e5721bb58d5e5540ea756d1197f3",
+            "size": 83267264,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-x86_64-linux-gnu.tar.xz"
           },
           "linux-arm64": {
-            "sha256": "cca598861f999bfd408491f4288c2f381b448f9ddbdac2fb4144747329878405",
-            "size": 72943108,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-aarch64-linux-gnu.tar.xz"
+            "sha256": "a3d89fcb12b59b7b96a20c05e32a4c7ffe3400f965c153310137ffa02e27ec38",
+            "size": 72333960,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-aarch64-linux-gnu.tar.xz"
           },
           "linux-armhf": {
-            "sha256": "26251ee323f616199fcef7a8ea5ee95a2cda2c1e781196ec002c49aeb99de1db",
-            "size": 75990564,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-arm-linux-gnueabihf.tar.xz"
+            "sha256": "79995c0ce185aad89b3f96d097e6ca6c0273cccf47961c5e6c89d6cd494ea0d0",
+            "size": 75211944,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-arm-linux-gnueabihf.tar.xz"
           },
           "macos": {
-            "sha256": "1c8ad98599a58c64396476ae9f66e33f408a2b2ed8ee6f8b2f0a92a5bd6bad84",
-            "size": 60626132,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-x86_64-apple-darwin.tar.xz"
+            "sha256": "2e3c51ffa570f7f3ea562686b3fef1a1c07a541096ac291b9bb8bfbac7b82f9c",
+            "size": 59725364,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-x86_64-apple-darwin.tar.xz"
           },
           "macos-arm64": {
-            "sha256": "9582374ed7664aa46c5fc8cedde74b81ec85db9013e7ce85d01e172e92f0ac1f",
-            "size": 51084140,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-aarch64-apple-darwin.tar.xz"
+            "sha256": "b524f0f36c6b8897b5dc2a85f66102cc44a2d1dcfdde15fa96796b7c1778b8d3",
+            "size": 50260232,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-aarch64-apple-darwin.tar.xz"
           },
-          "name": "esp-20.1.1_20250829",
+          "name": "esp-21.1.3_20260408",
           "status": "recommended",
           "win64": {
-            "sha256": "f4346641a38e6a9adad79c429be506b3df26540c50f39ab49dba9ad2c797a805",
-            "size": 42491440,
-            "url": "https://github.com/espressif/llvm-project/releases/download/esp-20.1.1_20250829/libs-clang-esp-20.1.1_20250829-x86_64-w64-mingw32.tar.xz"
+            "sha256": "00cc2ba925b6d807d722635516a1c44ce3e82cb9f01a2ea9385f19e6cb88c7c5",
+            "size": 43058104,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/libs-clang-esp-21.1.3_20260408-x86_64-w64-mingw32.tar.xz"
           }
         }
       ]
@@ -694,46 +694,46 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "dbd7ecf751431c70628176fbf1ce404c3ff28027e91b66bda7f834a2d5ff5b81",
-            "size": 2603774,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-linux-amd64-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "0c875beb0e8d89cee4335968e8a27c7d151f05b91f636263c81ab01e098d390d",
+            "size": 2630575,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-linux-amd64-0.12.0-esp32-20260424.tar.gz"
           },
           "linux-arm64": {
-            "sha256": "7fbe82e36f8e34a7a3118045fd7888754afbfe4c60cfaee0ac70663fd5965f63",
-            "size": 2518511,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-linux-arm64-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "f1b87d408adf6f2eb08a2b067ff7de38310829cc952c0f5d1d09920b0200a6e4",
+            "size": 2554716,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-linux-arm64-0.12.0-esp32-20260424.tar.gz"
           },
           "linux-armel": {
-            "sha256": "c717a6ff87b07be729850fd7662fda3f1d4d7125d44dd15b0694e3021bed2bfb",
-            "size": 2702211,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-linux-armel-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "6d8d3aa1a4d77610e03cbba48e359c14e7e96f5b3e9d4dfc0b7d1a2846421ca4",
+            "size": 2718565,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-linux-armel-0.12.0-esp32-20260424.tar.gz"
           },
           "linux-armhf": {
-            "sha256": "847df6f58308fddbb00d0db71ad971d9ab6346d091bb060bd98c053a0d4e4322",
-            "size": 2524667,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-linux-armhf-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "e7ad3fdd0c17679480c8f2a1a834db6c06db1f10fa500143fb701f0b833e5f7f",
+            "size": 2542154,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-linux-armhf-0.12.0-esp32-20260424.tar.gz"
           },
           "macos": {
-            "sha256": "be6951d9766f88fad11060314f6c3469c56715a60f2715aaeb7d806afc935c0d",
-            "size": 2768050,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-macos-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "f3e3008e6a85e4dfea0177b9ea3fd769447e19a0f132e7754e4a7db164727f8e",
+            "size": 2790443,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-macos-0.12.0-esp32-20260424.tar.gz"
           },
           "macos-arm64": {
-            "sha256": "a36099d3a47241e816693d9bd719198e4667ad67f0a027404d90584d44b6842d",
-            "size": 2592946,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-macos-arm64-0.12.0-esp32-20260304.tar.gz"
+            "sha256": "c7bffa205ca92a69ae7bc74e6e428824084e404355cbb9df2238fe30f5f435bb",
+            "size": 2613579,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-macos-arm64-0.12.0-esp32-20260424.tar.gz"
           },
-          "name": "v0.12.0-esp32-20260304",
+          "name": "v0.12.0-esp32-20260424",
           "status": "recommended",
           "win32": {
-            "sha256": "a9db16887fb0df26d1c3e495203c9edcd86d9262b2be7b7d929f8017194add31",
-            "size": 3176748,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-win32-0.12.0-esp32-20260304.zip"
+            "sha256": "51682616fb443819ba5b3d982d991917576ea24ab4b8b0c4ac7b6427c57d4d67",
+            "size": 3203101,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-win32-0.12.0-esp32-20260424.zip"
           },
           "win64": {
-            "sha256": "ad29bd55f2b7ad39669fbeeec32012954359dcfc0ecfa5a03068589b4d0e8613",
-            "size": 3176747,
-            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260304/openocd-esp32-win64-0.12.0-esp32-20260304.zip"
+            "sha256": "d0005eea5b916df047afca7b777792050f8c6a6a502407180c8d839e9a841f75",
+            "size": 3203098,
+            "url": "https://github.com/espressif/openocd-esp32/releases/download/v0.12.0-esp32-20260424/openocd-esp32-win64-0.12.0-esp32-20260424.zip"
           }
         }
       ]
@@ -999,31 +999,31 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "588bfaccd0f929650655d10a580f020c6ba9c131712d8fa519280081b8d126eb",
-            "size": 15648448,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-xtensa-softmmu-esp_develop_9.2.2_20250817-x86_64-linux-gnu.tar.xz"
+            "sha256": "0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35",
+            "size": 15619396,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz"
           },
           "linux-arm64": {
-            "sha256": "317f6e0fd1dba0886d8110709823d909593ef29438822a14f81ebe19d72ce7cd",
-            "size": 15123084,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-xtensa-softmmu-esp_develop_9.2.2_20250817-aarch64-linux-gnu.tar.xz"
+            "sha256": "00de5985094c14e47d1b38464a006b8ed64fd0fa7a289c56da24f3a329f65339",
+            "size": 15111492,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-aarch64-linux-gnu.tar.xz"
           },
           "macos": {
-            "sha256": "00b9dbc2124cf7633cb86f264fbc524226ad4001bce68bbdba43c9bdc4eb026e",
-            "size": 4092932,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-xtensa-softmmu-esp_develop_9.2.2_20250817-x86_64-apple-darwin.tar.xz"
+            "sha256": "ae8170fe46bcdfa54a7c0d7afcdb7a066711991be680f72ff7bbc6c4ae3ad88f",
+            "size": 3870980,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-x86_64-apple-darwin.tar.xz"
           },
           "macos-arm64": {
-            "sha256": "aa92e337461d482f5d9f31cd8efc0bd67b3de8fcfcfb567289cb43a59c184651",
-            "size": 3882404,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-xtensa-softmmu-esp_develop_9.2.2_20250817-aarch64-apple-darwin.tar.xz"
+            "sha256": "bb8c15810565d3df1665dc34962430885e11bc95575b228fb44698146be1e9d6",
+            "size": 3867936,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-aarch64-apple-darwin.tar.xz"
           },
-          "name": "esp_develop_9.2.2_20250817",
+          "name": "esp_develop_9.2.2_20260417",
           "status": "recommended",
           "win64": {
-            "sha256": "ef550b912726997f3c1ff4a4fb13c1569e2b692efdc5c9f9c3c926a8f7c540fa",
-            "size": 34664956,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-xtensa-softmmu-esp_develop_9.2.2_20250817-x86_64-w64-mingw32.tar.xz"
+            "sha256": "3c483d77f5350a568df1faf4d8dbc82c95d6bc2b826d0d4be910485e0a68ca2a",
+            "size": 35996720,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-x86_64-w64-mingw32.tar.xz"
           }
         }
       ]
@@ -1052,31 +1052,174 @@
       "versions": [
         {
           "linux-amd64": {
-            "sha256": "373b37a68bae3ef441ead24a7bfc950fcbfc274cbdd2b628fc6915f179eb1d8e",
-            "size": 16850080,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-riscv32-softmmu-esp_develop_9.2.2_20250817-x86_64-linux-gnu.tar.xz"
+            "sha256": "547f03e04701a92cbb699f7f7d015adc1f5b5ef93cbb94c0dd9b7107e2d84e77",
+            "size": 16842920,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz"
           },
           "linux-arm64": {
-            "sha256": "f907a54313058f8a9681d2f48257d518950ff98bcd5a319194b4bee7c10cf223",
-            "size": 16332832,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-riscv32-softmmu-esp_develop_9.2.2_20250817-aarch64-linux-gnu.tar.xz"
+            "sha256": "a9f7b98636008edcf7a11c96f10b3a3ec83c2a890fc54c3e3ceb3ec9edace427",
+            "size": 16325180,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-aarch64-linux-gnu.tar.xz"
           },
           "macos": {
-            "sha256": "820028ee7cd2dd8fe8cd8ca5519ab6e792d15fea9367c4525cf63c0f707c0b1f",
-            "size": 4086872,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-riscv32-softmmu-esp_develop_9.2.2_20250817-x86_64-apple-darwin.tar.xz"
+            "sha256": "a47c38c6e2eb9f5028eda9585dce999ce02b8983a2cdf71c48cfb10a14ae25fe",
+            "size": 3763576,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-x86_64-apple-darwin.tar.xz"
           },
           "macos-arm64": {
-            "sha256": "234690b6fa7c1d5dfe3dbb2bdd0c2810755e7c98999a9f21c389a6046b7eb76d",
-            "size": 3761104,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-riscv32-softmmu-esp_develop_9.2.2_20250817-aarch64-apple-darwin.tar.xz"
+            "sha256": "67bff66ff7158f272ce167fc211c0f8f4c1a79b6f6174350678a6d5035644b30",
+            "size": 3763728,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-aarch64-apple-darwin.tar.xz"
           },
-          "name": "esp_develop_9.2.2_20250817",
+          "name": "esp_develop_9.2.2_20260417",
           "status": "recommended",
           "win64": {
-            "sha256": "9474015f24d27acb7516955ec932e5307226bd9d6652cdc870793ed36010ab73",
-            "size": 37189656,
-            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20250817/qemu-riscv32-softmmu-esp_develop_9.2.2_20250817-x86_64-w64-mingw32.tar.xz"
+            "sha256": "697aa4800a1f52be0b1693b30e22a684f7ea93c46c489e619384cae7b0e9b87b",
+            "size": 38496020,
+            "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-x86_64-w64-mingw32.tar.xz"
+          }
+        }
+      ]
+    },
+    {
+      "description": "Clangd for all Espressif chips",
+      "export_paths": [
+        [
+          "esp-clangd",
+          "bin"
+        ]
+      ],
+      "export_vars": {},
+      "info_url": "https://github.com/espressif/llvm-project",
+      "install": "always",
+      "license": "Apache-2.0",
+      "name": "esp-clangd",
+      "supported_targets": [
+        "esp32",
+        "esp32s2",
+        "esp32s3",
+        "esp32c3",
+        "esp32c2",
+        "esp32c6",
+        "esp32c5",
+        "esp32h2",
+        "esp32p4",
+        "esp32c61",
+        "esp32h21",
+        "esp32h4",
+        "esp32s31"
+      ],
+      "version_cmd": [
+        "clangd",
+        "--version"
+      ],
+      "version_regex": "\\([^\\s]+\\s+([0-9a-zA-Z\\.\\-_]+)\\)",
+      "versions": [
+        {
+          "linux-amd64": {
+            "sha256": "7133e67db271ca96b30ec9f5c34c903eaf5fe10120cfe44f85eb88db7ddbe230",
+            "size": 17077740,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-x86_64-linux-gnu.tar.xz"
+          },
+          "linux-arm64": {
+            "sha256": "468e6fa03def6bcf0c0469d25b8d8b86212e5a94716d0b3db149f21b77791c54",
+            "size": 14706612,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-aarch64-linux-gnu.tar.xz"
+          },
+          "linux-armhf": {
+            "sha256": "401a3b08011de2a52af6ed729ddf49f970072047886423b148a3cae980e1ef2d",
+            "size": 15367384,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-arm-linux-gnueabihf.tar.xz"
+          },
+          "macos": {
+            "sha256": "cb8ac31ea7f8e20da69cea9e1720500571c8f2bae335eb1721b676f7ef3950fe",
+            "size": 12662520,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-x86_64-apple-darwin.tar.xz"
+          },
+          "macos-arm64": {
+            "sha256": "6dccab9acc9766c90383e9b2585fa1cfabad6125bdc32987a86a02cea598970d",
+            "size": 10995644,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-aarch64-apple-darwin.tar.xz"
+          },
+          "name": "esp-21.1.3_20260408",
+          "status": "recommended",
+          "win64": {
+            "sha256": "1a91c04bb570e0740eede529b20c98c2dd0be6750eb7d91a7226e19f3d88d490",
+            "size": 14144936,
+            "url": "https://github.com/espressif/llvm-project/releases/download/esp-21.1.3_20260408/clangd-esp-21.1.3_20260408-x86_64-w64-mingw32.tar.xz"
+          }
+        }
+      ]
+    },
+    {
+      "description": "ESP-IDF configuration dependency tool",
+      "export_paths": [
+        [
+          "esp-idf-configdep-0.2.2",
+          "bin"
+        ]
+      ],
+      "export_vars": {},
+      "info_url": "https://github.com/espressif/esp-idf-configdep",
+      "install": "always",
+      "license": "Apache-2.0",
+      "name": "esp-idf-configdep",
+      "supported_targets": [
+        "all"
+      ],
+      "version_cmd": [
+        "esp-idf-configdep",
+        "--version"
+      ],
+      "version_regex": "version: ([0-9.]+)",
+      "versions": [
+        {
+          "linux-amd64": {
+            "sha256": "999aa895c25d5c7edb6823884d3017f146b133f7ae2c580fffe4c989d7ce8c36",
+            "size": 28505,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-linux-x86_64.tar.gz"
+          },
+          "linux-arm64": {
+            "sha256": "0ea8f5e0de463ecfa3354a27b32ba34c4b999570e92127952fe7363f034ab7e9",
+            "size": 59608,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-linux-arm64.tar.gz"
+          },
+          "linux-armel": {
+            "sha256": "0e1663a6f9d8c030f11feb214aab0ffc3b9f6029ebc7ce10cad974db13667632",
+            "size": 36797,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-linux-armel.tar.gz"
+          },
+          "linux-armhf": {
+            "sha256": "98759c0a16e56ec96cc72f2d6b60d2f548194cfcc2adde11cd65c694241912b6",
+            "size": 34310,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-linux-armhf.tar.gz"
+          },
+          "linux-i686": {
+            "sha256": "e337582b1570ac90fcfde0b724e41d62b01581ec0a755c97ac38024c5def55ac",
+            "size": 32114,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-linux-x86.tar.gz"
+          },
+          "macos": {
+            "sha256": "8e7ad2fd91214219c276c6b371f0cd3e315f22055554d60856e88d84eb6422e9",
+            "size": 12755,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-macos-x86_64.tar.gz"
+          },
+          "macos-arm64": {
+            "sha256": "458fa0e3193184ca6360bf35058c63e763545f0ef6cb0b659b01985a5dfafdbf",
+            "size": 13023,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-macos-arm64.tar.gz"
+          },
+          "name": "0.2.2",
+          "status": "recommended",
+          "win32": {
+            "sha256": "6bec5711daa5196df8ec3fa2d3c2c79623e7dc6cb5e0b6cede03ef49b71ac6ac",
+            "size": 114156,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-win-x86.zip"
+          },
+          "win64": {
+            "sha256": "1827c449c9294036f94fa82f5da65f10be1edbc2de6920ce9837cbee1393cac8",
+            "size": 117734,
+            "url": "https://github.com/espressif/esp-idf-configdep/releases/download/v0.2.2/esp-idf-configdep-0.2.2-win-x86_64.zip"
           }
         }
       ]

@@ -18,6 +18,7 @@
 #include "hal/ledc_hal.h"
 #include "driver/ledc.h"
 #include "esp_private/esp_sleep_internal.h"
+#include "esp_sleep.h"
 #include "esp_private/periph_ctrl.h"
 #include "driver/gpio.h"
 #include "esp_private/gpio.h"
@@ -438,6 +439,7 @@ static bool ledc_speed_mode_ctx_create(ledc_mode_t speed_mode)
                             .arg = NULL,
                         },
                     },
+                    .attribute = SLEEP_RETENTION_MODULE_ATTR_ATTACH,
                     .depends = RETENTION_MODULE_BITMAP_INIT(CLOCK_SYSTEM)
                 };
                 if (sleep_retention_module_init(module, &init_param) != ESP_OK) {
@@ -877,6 +879,9 @@ esp_err_t ledc_channel_config(const ledc_channel_config_t *ledc_conf)
     LEDC_ARG_CHECK(ledc_conf->sleep_mode < LEDC_SLEEP_MODE_INVALID, "sleep_mode");
 #if !SOC_LEDC_SUPPORT_SLEEP_RETENTION
     ESP_RETURN_ON_FALSE(ledc_conf->sleep_mode != LEDC_SLEEP_MODE_NO_ALIVE_ALLOW_PD, ESP_ERR_NOT_SUPPORTED, LEDC_TAG, "register back up is not supported");
+#if SOC_PM_SUPPORT_TOP_PD
+    esp_sleep_pd_config(ESP_PD_DOMAIN_TOP, ESP_PD_OPTION_ON); //IDF-15643
+#endif
 #endif
 
     esp_err_t ret = ESP_OK;
@@ -967,9 +972,14 @@ esp_err_t ledc_channel_config(const ledc_channel_config_t *ledc_conf)
     if (slp_retention_alloc) {
         if (sleep_retention_module_allocate(ledc_reg_retention_info[0].module_id) != ESP_OK) {
             ESP_LOGW(LEDC_TAG, "create retention module failed, power domain can't turn off");
+        } else {
+            if (sleep_retention_module_attach(ledc_reg_retention_info[0].module_id) != ESP_OK) {
+                ESP_LOGW(LEDC_TAG, "attach retention module failed, power domain can't turn off");
+            }
         }
     }
     if (slp_retention_free) {
+        sleep_retention_module_detach(ledc_reg_retention_info[0].module_id);
         sleep_retention_module_free(ledc_reg_retention_info[0].module_id);
     }
 #endif

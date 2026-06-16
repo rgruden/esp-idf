@@ -48,6 +48,9 @@ ESP-IDF 中集成的电源管理算法可以根据应用程序组件的需求，
 
   Light-sleep 状态下，外设设有时钟门控，不会产生来自 GPIO 和内部外设的中断。:doc:`sleep_modes` 文档中所提到的唤醒源可用于从 Light-sleep 状态触发唤醒。
 
+.. warning::
+  自动 Light-sleep 模式基于定时器唤醒实现，请勿手动配置定时器唤醒源。
+
 .. only:: SOC_PM_SUPPORT_EXT0_WAKEUP and SOC_PM_SUPPORT_EXT1_WAKEUP
 
   例如，EXT0 和 EXT1 唤醒源可以通过 GPIO 唤醒芯片。
@@ -133,6 +136,11 @@ ESP-IDF 使用预测性时间补偿机制来实现自动 Light-sleep。系统会
 4. 调试与应用程序中锁管理相关的问题
 
 要启用性能分析功能（单个锁的计时信息），请在 menuconfig 中启用 :ref:`CONFIG_PM_PROFILING` 选项。
+
+应用示例
+-------------------
+
+:example:`lowpower/power_management` 示例演示了动态调频、自动 Light-sleep 与电源管理锁。
 
 动态调频和外设驱动
 ------------------------------------------------

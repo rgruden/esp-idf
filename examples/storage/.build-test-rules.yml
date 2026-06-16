@@ -1,6 +1,10 @@
 # Documentation: .gitlab/ci/README.md#manifest-file-to-control-the-buildtest-apps
 
 examples/storage/custom_flash_driver:
+  disable_test:
+    - if: IDF_TARGET == "esp32h4"
+      temporary: true
+      reason: cannot pass # TODO: IDF-15601
   depends_components:
     - spi_flash
 
@@ -69,7 +73,7 @@ examples/storage/sd_card/sdmmc:
   disable:
     - if: SOC_SDMMC_HOST_SUPPORTED != 1
   disable_test:
-    - if: IDF_TARGET not in ["esp32", "esp32p4"]
+    - if: IDF_TARGET not in ["esp32", "esp32p4", "esp32s31"]
       temporary: true
       reason: lack of runners
 

@@ -13,7 +13,6 @@
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/mspi_timing_tuning.h"
 #include "esp_private/esp_psram_impl.h"
-#include "esp_private/esp_psram_ldo.h"
 #include "hal/psram_ctrlr_ll.h"
 #include "hal/mspi_ll.h"
 #include "soc/rtc.h"
@@ -413,12 +412,8 @@ static void s_configure_psram_ecc(void)
 
 esp_err_t esp_psram_impl_enable(void)
 {
-#if PSRAM_CTRLR_LL_DEDICATED_LDO
-    esp_psram_power_cfg_t config = {
-        .voltage_mv = CONFIG_SPIRAM_LDO_VOLTAGE_DOMAIN,
-    };
-    esp_psram_power_init(&config);
-#endif
+    psram_ctrlr_ll_enable_power(true);
+
 #if SOC_CLK_MPLL_SUPPORTED
     // We need to use the acquire and freq_set functions directly instead of general clk_tree API for IRAM safe function
     esp_clk_tree_mpll_acquire();
@@ -488,7 +483,7 @@ esp_err_t esp_psram_impl_enable(void)
 
 uint8_t esp_psram_impl_get_cs_io(void)
 {
-    ESP_EARLY_LOGI(TAG, "psram CS IO is dedicated");
+    ESP_EARLY_LOGD(TAG, "psram CS IO is dedicated");
     return -1;
 }
 
@@ -563,15 +558,8 @@ void esp_psram_impl_exit_halfsleep_mode(void)
     // Record the tick exiting halfsleep mode
     s_halfsleep_ctx.halfsleep_wakeup_tick = rtc_time_get();
 
-    // Do a SPI dummy write transmission to invalid address to wake up from halfsleep mode
-    uint8_t null = 0;
-    psram_ctrlr_ll_common_transaction(PSRAM_CTRLR_LL_MSPI_ID_3,
-                                      AP_OCT_PSRAM_REG_WRITE, AP_OCT_PSRAM_WR_CMD_BITLEN,
-                                      0xFF, AP_OCT_PSRAM_ADDR_BITLEN,
-                                      0,
-                                      &null, 0,
-                                      NULL, 0,
-                                      false);
+    // Set CE# to active to wakeup PSRAM halfsleep
+    psram_ctrlr_ll_half_sleep_wakeup();
 }
 
 void esp_psram_impl_resume_from_halfsleep_mode(uint32_t slowclk_period)

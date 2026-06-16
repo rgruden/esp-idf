@@ -28,11 +28,13 @@
 #include "host/ble_gatt.h"
 #include "host/ble_hs_mbuf.h"
 
-#include "nimble/profiles/server.h"
+#include "nimble/server.h"
 
 #include "common/host.h"
 
 #include "../../../lib/include/audio.h"
+
+LOG_MODULE_REGISTER(LEA_MCS, CONFIG_BT_ISO_LOG_LEVEL);
 
 #if CONFIG_BT_OTS
 #define INC_OTS_CHR_COUNT   8   /* - OTS Feature (M)
@@ -391,20 +393,25 @@ int bt_le_nimble_gmcs_attr_handle_set(void)
     uint16_t end_handle = 0;
     int rc;
 
-    gmcs_svc = lib_mcs_svc_get();
-    assert(gmcs_svc);
-
-    LOG_DBG("[N]GmcsAttrHdlSet[%u]", gmcs_svc->attr_count);
-
+    /* App may not register this svc (e.g. CAP Acceptor single mode keeps
+     * unused capability built). Skip rather than fail audio_start.
+     */
     rc = ble_gatts_find_svc(BLE_UUID16_DECLARE(BT_UUID_GMCS_VAL), &start_handle);
     if (rc) {
-        LOG_ERR("[N]GmcsNotFound[%d]", rc);
-        return rc;
+        LOG_DBG("[N]GmcsNotInit");
+        return 0;
+    }
+
+    gmcs_svc = lib_mcs_svc_get();
+    if (!gmcs_svc) {
+        LOG_ERR("[N]GmcsSvcGetFail");
+        return -ENODEV;
     }
 
     end_handle = start_handle + gmcs_svc->attr_count - 1;
 
-    LOG_DBG("[N]Hdl[%u][%u]", start_handle, end_handle);
+    LOG_DBG("[N]GmcsAttrHdlSet[%u][%u][%u]",
+            start_handle, end_handle, gmcs_svc->attr_count);
 
     for (size_t i = 0; i < gmcs_svc->attr_count; i++) {
         (gmcs_svc->attrs + i)->handle = start_handle + i;
@@ -442,7 +449,10 @@ static int gmcs_svc_check(void)
      */
 
     gmcs_svc = lib_mcs_svc_get();
-    assert(gmcs_svc);
+    if (!gmcs_svc) {
+        LOG_ERR("[N]GmcsSvcGetFail");
+        return -ENODEV;
+    }
 
     LOG_DBG("[N]GmcsSvcCheck");
 

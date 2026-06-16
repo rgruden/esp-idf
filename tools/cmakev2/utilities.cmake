@@ -144,6 +144,32 @@ function(deprecate_variable var)
 endfunction()
 
 #[[
+.. cmakev2:function:: __check_python_package_min_version
+
+    .. code-block:: cmake
+
+        __check_python_package_min_version(<python_exe> <package_name> <min_version> <result_var>)
+
+    Check whether a Python package is installed with at least the given version
+    via ``importlib.metadata.version``. Sets ``<result_var>`` to TRUE or FALSE
+    in the parent scope.
+#]]
+function(__check_python_package_min_version python_exe package_name min_version result_var)
+    execute_process(
+        COMMAND ${python_exe} -c
+            "from importlib.metadata import version; print(version('${package_name}'))"
+        OUTPUT_VARIABLE _ver
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _rc
+        ERROR_QUIET
+    )
+    set(${result_var} FALSE PARENT_SCOPE)
+    if(_rc EQUAL 0 AND _ver VERSION_GREATER_EQUAL "${min_version}")
+        set(${result_var} TRUE PARENT_SCOPE)
+    endif()
+endfunction()
+
+#[[
     __get_real_target(TARGET <target>
                       OUTPUT <variable>)
 
@@ -835,6 +861,17 @@ endfunction()
 function(target_add_binary_data target embed_file embed_type)
     cmake_parse_arguments(_ "" "RENAME_TO" "DEPENDS" ${ARGN})
     idf_build_get_property(build_dir BUILD_DIR)
+
+    # In cmakev1, the executable target was named "${project}.elf".
+    # In cmakev2, the executable is named "${project}" and ".elf" is just the
+    # output suffix. Strip the ".elf" suffix if the target does not exist but
+    # the bare name does. This keeps existing app CMakeLists.txt files working.
+    if(NOT TARGET "${target}")
+        string(REGEX REPLACE "\\.elf$" "" target_bare "${target}")
+        if(TARGET "${target_bare}")
+            set(target "${target_bare}")
+        endif()
+    endif()
     idf_build_get_property(idf_path IDF_PATH)
 
     get_filename_component(embed_file "${embed_file}" ABSOLUTE)

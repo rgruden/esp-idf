@@ -16,7 +16,7 @@ from typing import Any
 from typing import TextIO
 from typing import cast
 
-import click
+import rich_click as click
 import yaml
 from esp_idf_monitor import get_ansi_converter
 
@@ -349,6 +349,21 @@ def fit_text_in_terminal(out: str) -> str:
     return out
 
 
+# ANSI SGR / CSI sequences and Ninja-style progression lines are 7-bit; keep
+# readline forwarding on bytes so CMake UTF-8 pipe output is not re-encoded
+# through a legacy TextIOWrapper (cp1252) layer on Windows.
+_ANSI_ESCAPE_BYTES = re.compile(rb'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+_PROGRESSION_BYTES = re.compile(rb'^\[\d+/\d+\]|.*\(\d+ \%\)$')
+
+
+def delete_ansi_escape_bytes(data: bytes) -> bytes:
+    return _ANSI_ESCAPE_BYTES.sub(b'', data)
+
+
+def is_progression_bytes(line: bytes) -> bool:
+    return _PROGRESSION_BYTES.match(line) is not None
+
+
 class RunTool:
     def __init__(
         self,
@@ -480,10 +495,23 @@ class RunTool:
             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
             return ansi_escape.sub('', text)
 
+        def write_text_maybe_illencoded(stream: TextIO, text: str) -> None:
+            """Write ``text`` to ``stream``; on narrow Windows stdio, fall back so the build does not abort."""
+            try:
+                stream.write(text)
+                stream.flush()
+            except UnicodeEncodeError:
+                enc = getattr(stream, 'encoding', None) or 'ascii'
+                safe = text.encode(enc, errors='backslashreplace').decode(enc)
+                stream.write(safe)
+                stream.flush()
+
         def print_progression(output: str) -> None:
             # Print a new line on top of the previous line
-            print('\r' + fit_text_in_terminal(output.strip('\n\r')) + '\x1b[K', end='', file=output_stream)
-            output_stream.flush()
+            write_text_maybe_illencoded(
+                output_stream,
+                '\r' + fit_text_in_terminal(output.strip('\n\r')) + '\x1b[K',
+            )
 
         def is_progression(output: str) -> bool:
             # try to find possible progression by a pattern match
@@ -491,10 +519,12 @@ class RunTool:
                 return True
             return False
 
-        async def read_stream() -> str | None:
+        async def read_stream_bytes() -> bytes | None:
             try:
                 output_b = await input_stream.readline()
-                return output_b.decode(errors='ignore')
+                if not output_b:
+                    return None
+                return output_b
             except (asyncio.LimitOverrunError, asyncio.IncompleteReadError) as e:
                 print(e, file=sys.stderr)
                 return None
@@ -516,6 +546,23 @@ class RunTool:
                         # and still can not decode it we can just ignore some bytes
                         return buffer.decode(errors='replace')
 
+        def write_stdout_bytes(data: bytes) -> None:
+            """Write raw subprocess bytes to the underlying binary stream (UTF-8 from CMake, no TextIO re-encode)."""
+            binary_buf = getattr(output_stream, 'buffer', None)
+            if binary_buf is not None:
+                binary_buf.write(data)
+                binary_buf.flush()
+            else:
+                write_text_maybe_illencoded(output_stream, data.decode('utf-8', errors='replace'))
+
+        def write_stdout_after_progression_line() -> None:
+            """Emit a newline after a progression ``\\r`` line (binary when possible)."""
+            if not self.convert_output and getattr(output_stream, 'buffer', None) is not None:
+                output_stream.buffer.write(os.linesep.encode('ascii'))
+                output_stream.buffer.flush()
+            else:
+                write_text_maybe_illencoded(output_converter, os.linesep)
+
         # use ANSI color converter for Monitor on Windows
         output_converter = get_ansi_converter(output_stream) if self.convert_output else output_stream
 
@@ -526,47 +573,60 @@ class RunTool:
         is_progression_processing_enabled = self.force_progression and output_stream.isatty() and '-v' not in self.args
 
         try:
-            # The command output from asyncio stream already contains OS specific line ending,
-            # because it's read in as bytes and decoded to string. On Windows "output" already
-            # contains CRLF. Use "newline=''" to prevent python to convert CRLF into CRCRLF.
-            # Please see "newline" description at https://docs.python.org/3/library/functions.html#open
-            with open(output_filename, 'w', encoding='utf8', newline='') as output_file:
-                # Log the command arguments.
-                output_file.write('Command: {}\n'.format(' '.join(self.args)))
+            # Binary log: subprocess lines are written as received (ANSI stripped for the file).
+            with open(output_filename, 'wb') as output_file:
+                output_file.write('Command: {}\n'.format(' '.join(self.args)).encode('utf-8'))
                 while True:
                     if self.interactive:
                         output = await read_interactive_stream()
-                    else:
-                        output = await read_stream()
-                    if not output:
-                        break
+                        if not output:
+                            break
 
-                    output_noescape = delete_ansi_escape(output)
-                    # Always remove escape sequences when writing the build log.
-                    output_file.write(output_noescape)
-                    # If idf.py output is redirected and the output stream is not a TTY,
-                    # strip the escape sequences as well.
-                    # (There shouldn't be any, but just in case.)
-                    if not output_stream.isatty():
-                        output = output_noescape
+                        output_noescape = delete_ansi_escape(output)
+                        output_file.write(output_noescape.encode('utf-8'))
+                        if not output_stream.isatty():
+                            output = output_noescape
 
-                    if is_progression_processing_enabled and is_progression(output):
-                        print_progression(output)
-                        is_progression_last_line = True
-                    else:
-                        if is_progression_last_line:
-                            output_converter.write(os.linesep)
-                            is_progression_last_line = False
-                        output_converter.write(output)
-                        output_converter.flush()
+                        if is_progression_processing_enabled and is_progression(output):
+                            print_progression(output)
+                            is_progression_last_line = True
+                        else:
+                            if is_progression_last_line:
+                                write_stdout_after_progression_line()
+                                is_progression_last_line = False
+                            write_text_maybe_illencoded(output_converter, output)
 
-                        # process hints for last line and print them right away
-                        if self.interactive:
                             last_line += output
                             if last_line[-1] == '\n':
                                 for hint in generate_hints_buffer(last_line, hints):
                                     yellow_print(hint)
                                 last_line = ''
+                    else:
+                        output_b = await read_stream_bytes()
+                        if not output_b:
+                            break
+
+                        output_noescape_b = delete_ansi_escape_bytes(output_b)
+                        output_file.write(output_noescape_b)
+                        if not output_stream.isatty():
+                            forward_b = output_noescape_b
+                        else:
+                            forward_b = output_b
+
+                        if is_progression_processing_enabled and is_progression_bytes(output_b):
+                            print_progression(output_b.decode('utf-8', errors='replace'))
+                            is_progression_last_line = True
+                        else:
+                            if is_progression_last_line:
+                                write_stdout_after_progression_line()
+                                is_progression_last_line = False
+                            if self.convert_output:
+                                write_text_maybe_illencoded(
+                                    output_converter,
+                                    forward_b.decode('utf-8', errors='replace'),
+                                )
+                            else:
+                                write_stdout_bytes(forward_b)
         except (OSError, RuntimeError) as e:
             yellow_print(
                 "WARNING: The exception {} was raised and we can't capture all your {} and "
@@ -728,6 +788,7 @@ def ensure_build_directory(
     cache = _parse_cmakecache(cache_path) if os.path.exists(cache_path) else {}
 
     args.define_cache_entry.append(f'CCACHE_ENABLE={args.ccache}')
+    args.define_cache_entry.append(f'CONFIGDEP_ENABLE={args.configdep}')
 
     cache_cmdl = _parse_cmdl_cmakecache(args.define_cache_entry)
 
@@ -922,17 +983,10 @@ def get_sdkconfig_value(sdkconfig_file: str, key: str) -> str | None:
     pattern = re.compile(rf'^{key}=\"?([^\"]*)\"?$')
     with open(sdkconfig_file, encoding='utf-8') as f:
         for line in f:
-            match = re.match(pattern, line)
+            match = re.match(pattern, line.strip())
             if match:
                 value = match.group(1)
     return value
-
-
-def is_target_supported(project_path: str, supported_targets: list) -> bool:
-    """
-    Returns True if the active target is supported, or False otherwise.
-    """
-    return get_target(project_path) in supported_targets
 
 
 def _check_idf_target(

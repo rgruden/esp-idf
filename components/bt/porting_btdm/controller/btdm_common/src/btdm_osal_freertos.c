@@ -795,6 +795,9 @@ wr_btdm_osal_callout_reset(struct btdm_osal_callout *co, btdm_osal_time_t ticks)
     struct btdm_osal_callout_freertos *callout = (struct btdm_osal_callout_freertos *)co->co;
 #if BTDM_OSAL_USE_ESP_TIMER
     esp_timer_stop(callout->handle);
+    if (callout->evq) {
+        btdm_osal_eventq_remove(callout->evq, &callout->ev);
+    }
 
     return esp_err_to_npl_error(esp_timer_start_once(callout->handle, ticks * 1000));
 #else
@@ -806,6 +809,9 @@ wr_btdm_osal_callout_reset(struct btdm_osal_callout *co, btdm_osal_time_t ticks)
     }
     if (in_isr()) {
         xTimerStopFromISR(callout->handle, &woken1);
+        if (callout->evq) {
+            btdm_osal_eventq_remove(callout->evq, &callout->ev);
+        }
         xTimerChangePeriodFromISR(callout->handle, ticks, &woken2);
         xTimerResetFromISR(callout->handle, &woken3);
 
@@ -814,6 +820,9 @@ wr_btdm_osal_callout_reset(struct btdm_osal_callout *co, btdm_osal_time_t ticks)
         }
     } else {
         xTimerStop(callout->handle, portMAX_DELAY);
+        if (callout->evq) {
+            btdm_osal_eventq_remove(callout->evq, &callout->ev);
+        }
         xTimerChangePeriod(callout->handle, ticks, portMAX_DELAY);
         xTimerReset(callout->handle, portMAX_DELAY);
     }
@@ -844,6 +853,10 @@ wr_btdm_osal_callout_stop(struct btdm_osal_callout *co)
 #else
     xTimerStop(callout->handle, portMAX_DELAY);
 #endif
+
+    if (callout->evq) {
+        btdm_osal_eventq_remove(callout->evq, &callout->ev);
+    }
 }
 
 bool IRAM_ATTR
@@ -1209,15 +1222,16 @@ wr_btdm_osal_srand(uint32_t seed)
 int
 wr_btdm_osal_rand(void)
 {
-    // TODO: use esp_random
-    // return (int)esp_random();
-
+#if CONFIG_SOC_RNG_SUPPORTED
+    return (int)esp_random();
+#else
     static bool first = true;
 
     if (first) {
         uint8_t mac[6];
         uint32_t seed;
 
+        ESP_LOGW(TAG, "Hardware RNG not supported; using insecure software random instead.");
         first = false;
         btdm_osal_read_efuse_mac(mac);
         seed = (mac[2] << 24) | (mac[3] << 16) | (mac[4] << 8) | mac[5];
@@ -1225,6 +1239,7 @@ wr_btdm_osal_rand(void)
     }
 
     return rand();
+#endif // CONFIG_SOC_RNG_SUPPORTED
 }
 
 /*

@@ -11,7 +11,6 @@
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/mspi_timing_tuning.h"
 #include "esp_private/esp_psram_impl.h"
-#include "esp_private/esp_psram_ldo.h"
 #include "hal/psram_ctrlr_ll.h"
 #include "hal/mspi_ll.h"
 #include "soc/rtc.h"
@@ -463,7 +462,7 @@ esp_err_t esp_psram_impl_enable(void)
     s_init_psram_mode_reg(PSRAM_CTRLR_LL_MSPI_ID_3, &mode_reg);
 
     if (s_check_psram_connected(PSRAM_CTRLR_LL_MSPI_ID_3) != ESP_OK) {
-        ESP_EARLY_LOGE(TAG, "PSRAM chip is not connected");
+        PSRAM_LOG_NOTFOUND(TAG, "PSRAM chip is not connected");
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -489,7 +488,7 @@ esp_err_t esp_psram_impl_enable(void)
 
 uint8_t esp_psram_impl_get_cs_io(void)
 {
-    ESP_EARLY_LOGI(TAG, "psram CS IO is dedicated");
+    ESP_EARLY_LOGD(TAG, "psram CS IO is dedicated");
     return -1;
 }
 
@@ -568,7 +567,7 @@ PSRAM_HALFSLEEP_SLEEP_CODE_ATTR void esp_psram_impl_exit_halfsleep_mode(void)
     // Record the tick exiting halfsleep mode
     s_halfsleep_ctx.halfsleep_wakeup_tick = rtc_time_get();
 
-    // Do a SPI dummy write transmission to invalid address to wake up from halfsleep mode
+#if PSRAM_CTRLR_LL_MSPI_WAKEUP_WORKAROUND
     uint8_t null = 0;
     psram_ctrlr_ll_common_transaction(PSRAM_CTRLR_LL_MSPI_ID_3,
                                       AP_HEX_PSRAM_REG_WRITE, AP_HEX_PSRAM_WR_CMD_BITLEN,
@@ -577,6 +576,10 @@ PSRAM_HALFSLEEP_SLEEP_CODE_ATTR void esp_psram_impl_exit_halfsleep_mode(void)
                                       &null, 0,
                                       NULL, 0,
                                       false);
+#else
+    // Set CE# to active to wakeup PSRAM halfsleep
+    psram_ctrlr_ll_half_sleep_wakeup();
+#endif
 }
 
 PSRAM_HALFSLEEP_RESUME_CODE_ATTR void esp_psram_impl_resume_from_halfsleep_mode(uint32_t slowclk_period)

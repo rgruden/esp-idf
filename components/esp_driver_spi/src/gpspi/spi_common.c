@@ -379,6 +379,14 @@ esp_err_t spicommon_dma_desc_alloc(spi_host_device_t host_id, int cfg_max_sz, in
         }
         return ESP_ERR_NO_MEM;
     }
+    // cache sync using align_up length thanks to heap alloc already consider the cache alignment requirement
+    uint8_t aligned_len = SPI_ALIGN_UP(sizeof(spi_dma_desc_t) * dma_desc_ct, bus_ctx[host_id]->bus_attr.cache_align_int);
+    // write back and then invalidate the cache, because later we will read/write the link list items by non-cached address
+    esp_err_t ret = esp_cache_msync(dma_ctx->dmadesc_tx, aligned_len, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_INVALIDATE);
+    ESP_RETURN_ON_FALSE_ISR((ret == ESP_OK) || (ret == ESP_ERR_NOT_SUPPORTED), ESP_ERR_INVALID_ARG, SPI_TAG, "dma desc sync failed");
+    ret = esp_cache_msync(dma_ctx->dmadesc_rx, aligned_len, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_INVALIDATE);
+    ESP_RETURN_ON_FALSE_ISR((ret == ESP_OK) || (ret == ESP_ERR_NOT_SUPPORTED), ESP_ERR_INVALID_ARG, SPI_TAG, "dma desc sync failed");
+
     dma_ctx->dma_desc_num = dma_desc_ct;
     *actual_max_sz = dma_desc_ct * DMA_DESCRIPTOR_BUFFER_MAX_SIZE_4B_ALIGNED;
     return ESP_OK;
@@ -755,8 +763,8 @@ esp_err_t spicommon_bus_initialize_io(spi_host_device_t host, const spi_bus_conf
     } else {
         //Use GPIO matrix
         if (bus_config->mosi_io_num >= 0) {
-            int in_sig  = spi_periph_signal[host].spid_in; // always connect input in case sio mode device is used
-            int out_sig = ((flags & SPICOMMON_BUSFLAG_MASTER) || (temp_flag & SPICOMMON_BUSFLAG_DUAL)) ? spi_periph_signal[host].spid_out : -1;
+            int in_sig  = spi_periph_signal[host].spid_in; // always connect input in case sio master is used
+            int out_sig = spi_periph_signal[host].spid_out;// always connect output in case sio slave is used, output capability is checked in slave hd driver
             s_spi_common_bus_via_gpio(bus_config->mosi_io_num, in_sig, out_sig, &gpio_reserv);
         }
         if (bus_config->miso_io_num >= 0) {
@@ -946,14 +954,21 @@ esp_err_t spi_bus_initialize(spi_host_device_t host_id, const spi_bus_config_t *
                 .arg = ctx,
             },
         },
+        .attribute = SLEEP_RETENTION_MODULE_ATTR_ATTACH,
         .depends = RETENTION_MODULE_BITMAP_INIT(CLOCK_SYSTEM)
     };
 
     _lock_acquire(&ctx->mutex);
     if (sleep_retention_module_init(spi_reg_retention_info[host_id - 1].module_id, &init_param) == ESP_OK) {
-        if ((bus_config->flags & SPICOMMON_BUSFLAG_SLP_ALLOW_PD) && (sleep_retention_module_allocate(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK)) {
-            // even though the sleep retention create failed, SPI driver should still work, so just warning here
-            ESP_LOGW(SPI_TAG, "alloc sleep recover failed, peripherals may hold power on");
+        if ((bus_config->flags & SPICOMMON_BUSFLAG_SLP_ALLOW_PD)) {
+            if (sleep_retention_module_allocate(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK) {
+                // even though the sleep retention create failed, SPI driver should still work, so just warning here
+                ESP_LOGW(SPI_TAG, "alloc sleep recover failed, peripherals may hold power on");
+            } else {
+                if (sleep_retention_module_attach(spi_reg_retention_info[host_id - 1].module_id) != ESP_OK) {
+                    ESP_LOGW(SPI_TAG, "attach sleep recover failed, peripherals may hold power on");
+                }
+            }
         }
     } else {
         // even the sleep retention init failed, SPI driver should still work, so just warning here
@@ -1055,6 +1070,7 @@ esp_err_t spi_bus_free(spi_host_device_t host_id)
 #if SOC_SPI_SUPPORT_SLEEP_RETENTION && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP
     const periph_retention_module_t retention_id = spi_reg_retention_info[host_id - 1].module_id;
     _lock_acquire(&ctx->mutex);
+    sleep_retention_module_detach(retention_id);
     if (sleep_retention_is_module_created(retention_id)) {
         assert(sleep_retention_is_module_inited(retention_id));
         sleep_retention_module_free(retention_id);
