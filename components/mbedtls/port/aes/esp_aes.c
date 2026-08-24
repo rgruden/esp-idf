@@ -6,7 +6,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * SPDX-FileContributor: 2025 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileContributor: 2025-2026 Espressif Systems (Shanghai) CO LTD
  */
 /*
  *  The AES block cipher was designed by Vincent Rijmen and Joan Daemen.
@@ -424,6 +424,9 @@ int esp_aes_crypt_cfb8(esp_aes_context *ctx,
     }
 #endif /* !SOC_AES_SUPPORT_DMA || CONFIG_MBEDTLS_AES_HW_SMALL_DATA_LEN_OPTIM */
 cleanup:
+    /* ov holds the CFB8 feedback register (key/IV-derived state). Scrub it
+     * before returning so it cannot be recovered from stack RAM. */
+    mbedtls_platform_zeroize( ov, sizeof( ov ) );
     esp_aes_release_hardware();
     return ret;
 }
@@ -455,6 +458,15 @@ int esp_aes_crypt_cfb128(esp_aes_context *ctx,
     }
 
     n = *iv_off;
+
+    /* iv[] is a fixed 16-byte buffer and n indexes it directly (before the modulo-16 update),
+     * so a caller-supplied *iv_off > 15 -- attacker-controlled via the TEE secure service --
+     * is an out-of-bounds read/write of iv[] in TEE context (CWE-787 / CWE-125). Bound it here,
+     * matching the guard already present in esp_aes_crypt_ofb(). */
+    if (n >= AES_BLOCK_BYTES) {
+        ESP_LOGE(TAG, "IV offset out of bounds");
+        return MBEDTLS_ERR_AES_BAD_INPUT_DATA;
+    }
 
 #if SOC_AES_SUPPORT_DMA
 #if CONFIG_MBEDTLS_AES_HW_SMALL_DATA_LEN_OPTIM
@@ -580,6 +592,10 @@ int esp_aes_crypt_ofb(esp_aes_context *ctx,
     }
 
     n = *iv_off;
+    if (n >= AES_BLOCK_BYTES) {
+        ESP_LOGE(TAG, "IV offset out of bounds");
+        return MBEDTLS_ERR_AES_BAD_INPUT_DATA;
+    }
 
 #if SOC_AES_SUPPORT_DMA
 #if CONFIG_MBEDTLS_AES_HW_SMALL_DATA_LEN_OPTIM
@@ -684,6 +700,10 @@ int esp_aes_crypt_ctr(esp_aes_context *ctx,
     }
 
     n = *nc_off;
+    if (n >= AES_BLOCK_BYTES) {
+        ESP_LOGE(TAG, "IV offset out of bounds");
+        return MBEDTLS_ERR_AES_BAD_INPUT_DATA;
+    }
 
 #if SOC_AES_SUPPORT_DMA
 #if CONFIG_MBEDTLS_AES_HW_SMALL_DATA_LEN_OPTIM

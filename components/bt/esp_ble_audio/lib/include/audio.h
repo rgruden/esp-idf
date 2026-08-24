@@ -18,13 +18,13 @@ extern "C" {
 
 struct lib_ext_cfgs;
 struct lib_ext_funcs;
-struct lib_funcs;
+struct lib_int_funcs;
 
-extern int lib_ext_structs_check(const uint16_t *ext_structs, size_t size_structs);
-extern int lib_ext_cfgs_set(const struct lib_ext_cfgs *ext_cfgs, size_t size_cfgs);
-extern int lib_ext_funcs_set(const struct lib_ext_funcs *ext_funcs, size_t size_funcs);
-extern int lib_funcs_set(const struct lib_funcs *funcs, size_t size_funcs);
-extern const char *lib_ext_commit_get(void);
+extern int lib_audio_ext_structs_check(const uint16_t *ext_structs, size_t size_structs);
+extern int lib_audio_ext_cfgs_set(const struct lib_ext_cfgs *ext_cfgs, size_t size_cfgs);
+extern int lib_audio_ext_funcs_set(const struct lib_ext_funcs *ext_funcs, size_t size_funcs);
+extern int lib_audio_int_funcs_set(const struct lib_int_funcs *funcs, size_t size_funcs);
+extern const char *lib_audio_commit_get(void);
 
 struct bt_aics;
 struct bt_gatt_service;
@@ -79,7 +79,8 @@ extern int lib_has_init(void);
 extern int lib_has_client_init(void);
 
 extern int lib_mcc_init(void);
-extern struct bt_gatt_service *lib_mcs_svc_get(void);
+extern struct bt_gatt_service *lib_gmcs_svc_get(void);
+extern struct bt_gatt_service *lib_mcs_server_list_get(void);
 extern int lib_mcs_init(void);
 
 extern int lib_media_proxy_init(void);
@@ -134,6 +135,7 @@ enum bt_cap_common_subproc_type;
 enum bt_cap_common_proc_type;
 struct bt_cap_stream;
 struct bt_cap_broadcast_source;
+struct bt_cap_common_proc;
 
 struct bt_ots;
 struct bt_ots_client;
@@ -174,6 +176,7 @@ extern bool lib_bap_broadcast_source_has_ep(const struct bt_bap_ep *ep);
 
 #if CONFIG_BT_BAP_UNICAST_CLIENT
 extern bool lib_bap_unicast_client_has_ep(const struct bt_bap_ep *ep);
+extern struct bt_conn *lib_bap_unicast_client_ep_get_conn(const struct bt_bap_ep *ep);
 extern int lib_bap_unicast_client_register_cb(struct bt_bap_unicast_client_cb *cb);
 extern int lib_bap_unicast_client_config(struct bt_bap_stream *stream,
                                          const struct bt_audio_codec_cfg *codec_cfg);
@@ -187,6 +190,7 @@ extern int lib_bap_unicast_client_release(struct bt_bap_stream *stream);
 
 #if CONFIG_BT_BAP_UNICAST_SERVER
 extern bool lib_bap_unicast_server_has_ep(const struct bt_bap_ep *ep);
+extern struct bt_conn *lib_bap_unicast_server_ep_get_conn(const struct bt_bap_ep *ep);
 extern int lib_bap_unicast_server_reconfig(struct bt_bap_stream *stream,
                                            const struct bt_audio_codec_cfg *codec_cfg);
 extern int lib_bap_unicast_server_start(struct bt_bap_stream *stream);
@@ -222,11 +226,11 @@ extern void lib_cap_initiator_released(struct bt_cap_stream *cap_stream);
 #if CONFIG_BT_CAP_HANDOVER
 extern bool lib_cap_common_handover_is_active(void);
 extern bool lib_cap_handover_is_handover_broadcast_source(const  struct bt_cap_broadcast_source *cap_broadcast_source);
-extern void lib_cap_handover_complete(void);
-extern void lib_cap_handover_unicast_proc_complete(void);
+extern void lib_cap_handover_complete(struct bt_cap_common_proc *active_proc);
+extern void lib_cap_handover_unicast_proc_complete(struct bt_cap_common_proc *active_proc);
 extern void lib_cap_handover_broadcast_source_stopped(uint8_t reason);
 extern void lib_cap_handover_unicast_to_broadcast_reception_start(void);
-extern int lib_cap_handover_broadcast_reception_stopped(void);
+extern int lib_cap_handover_broadcast_reception_stopped(struct bt_cap_common_proc *active_proc);
 extern void lib_cap_handover_receive_state_updated(const struct bt_conn *conn,
                                                    const struct bt_bap_scan_delegator_recv_state *state);
 #endif /* CONFIG_BT_CAP_HANDOVER */
@@ -339,6 +343,11 @@ extern int lib_tbs_client_primary_discover_gtbs(struct bt_conn *conn);
 extern struct bt_tbs_instance *lib_tbs_client_get_by_ccid(const struct bt_conn *conn,
                                                           uint8_t ccid);
 #endif /* CONFIG_BT_TBS_CLIENT_CCID */
+
+#if CONFIG_BT_TBS_CLIENT
+extern struct bt_tbs_instance *lib_tbs_client_get_by_index(const struct bt_conn *conn,
+                                                           uint8_t index);
+#endif /* CONFIG_BT_TBS_CLIENT */
 
 #if CONFIG_BT_VCP_VOL_CTLR_AICS
 extern void lib_vcp_vol_ctlr_aics_init(void);

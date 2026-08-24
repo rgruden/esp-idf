@@ -36,36 +36,25 @@ set(MENUCONFIG_INLINE_MIN_KCONFIG_VERSION "3.9.0")
 function(__init_kconfig)
     idf_build_get_property(idf_path IDF_PATH)
 
-    # Initialize SDKCONFIG and SDKCONFIG_DEFAULTS build properties using environment
-    # variables, CMake cache variables, or default values.
-    if(EXISTS "${CMAKE_SOURCE_DIR}/sdkconfig.defaults")
-        set(sdkconfig_defaults "${CMAKE_SOURCE_DIR}/sdkconfig.defaults")
-    else()
-        set(sdkconfig_defaults "")
-    endif()
-
+    # Initialize the SDKCONFIG file path build property.
     __get_default_value(VARIABLE SDKCONFIG
                         DEFAULT "${CMAKE_SOURCE_DIR}/sdkconfig"
                         OUTPUT sdkconfig)
-    __get_default_value(VARIABLE SDKCONFIG_DEFAULTS
-                        DEFAULT "${sdkconfig_defaults}"
-                        OUTPUT sdkconfig_defaults)
-
     __get_absolute_paths(PATHS "${sdkconfig}" OUTPUT sdkconfig)
-    __get_absolute_paths(PATHS "${sdkconfig_defaults}" OUTPUT sdkconfig_defaults)
-
-    set(sdkconfig_defaults_checked "")
-    foreach(sdkconfig_default ${sdkconfig_defaults})
-        if(NOT EXISTS "${sdkconfig_default}")
-            idf_die("SDKCONFIG_DEFAULTS '${sdkconfig_default}' does not exist.")
-        endif()
-        list(APPEND sdkconfig_defaults_checked ${sdkconfig_default})
-    endforeach()
-
     idf_build_set_property(SDKCONFIG "${sdkconfig}")
     idf_build_set_property(__SDKCONFIG_ORIG "${sdkconfig}")
-    idf_build_set_property(SDKCONFIG_DEFAULTS "${sdkconfig_defaults_checked}")
-    idf_build_set_property(GENERATE_SDKCONFIG 1)
+
+    # Initialize the SDKCONFIG_DEFAULTS build property. __init_idf_target()
+    # reads this property to detect the target from the defaults files, so it
+    # must be resolved here. It is resolved again from __generate_sdkconfig()
+    # to pick up a SDKCONFIG_DEFAULTS variable assigned after
+    # include(project.cmake) but before project().
+    __resolve_sdkconfig_defaults()
+
+    __get_default_value(VARIABLE GENERATE_SDKCONFIG
+                        DEFAULT 1
+                        OUTPUT generate_sdkconfig)
+    idf_build_set_property(GENERATE_SDKCONFIG "${generate_sdkconfig}")
 
     # Setup ESP-IDF root Kconfig and sdkconfig.rename files.
     idf_build_set_property(__ROOT_KCONFIG "${idf_path}/Kconfig")
@@ -76,6 +65,54 @@ function(__init_kconfig)
     set(config_dir "${build_dir}/config")
     file(MAKE_DIRECTORY "${config_dir}")
     idf_build_set_property(CONFIG_DIR "${config_dir}")
+endfunction()
+
+#[[
+    __resolve_sdkconfig_defaults()
+
+    Resolve SDKCONFIG_DEFAULTS into a list of absolute, existing paths
+    and store it on the SDKCONFIG_DEFAULTS build property.
+
+    A SDKCONFIG_DEFAULTS variable (or environment variable) takes precedence
+    and is (re)resolved onto the build property. Otherwise a value already
+    accumulated on the build property (e.g. via
+    ``idf_build_set_property(SDKCONFIG_DEFAULTS "<path>" APPEND)``) is
+    preserved, and only when nothing has been set does it fall back to the
+    project's sdkconfig.defaults file. This makes the helper idempotent and
+    safe to call both early (from __init_kconfig) and again at
+    sdkconfig-generation time.
+#]]
+function(__resolve_sdkconfig_defaults)
+    if(NOT DEFINED SDKCONFIG_DEFAULTS AND NOT DEFINED ENV{SDKCONFIG_DEFAULTS})
+        # No SDKCONFIG_DEFAULTS variable override: keep a value already set on
+        # the build property; only fall back to the default when unset.
+        idf_build_get_property(existing SDKCONFIG_DEFAULTS)
+        if(existing)
+            return()
+        endif()
+    endif()
+
+    if(EXISTS "${CMAKE_SOURCE_DIR}/sdkconfig.defaults")
+        set(sdkconfig_defaults_default "${CMAKE_SOURCE_DIR}/sdkconfig.defaults")
+    else()
+        set(sdkconfig_defaults_default "")
+    endif()
+
+    __get_default_value(VARIABLE SDKCONFIG_DEFAULTS
+                        DEFAULT "${sdkconfig_defaults_default}"
+                        OUTPUT sdkconfig_defaults)
+
+    __get_absolute_paths(PATHS "${sdkconfig_defaults}" OUTPUT sdkconfig_defaults)
+
+    set(sdkconfig_defaults_checked "")
+    foreach(sdkconfig_default IN LISTS sdkconfig_defaults)
+        if(NOT EXISTS "${sdkconfig_default}")
+            idf_die("SDKCONFIG_DEFAULTS '${sdkconfig_default}' does not exist.")
+        endif()
+        list(APPEND sdkconfig_defaults_checked "${sdkconfig_default}")
+    endforeach()
+
+    idf_build_set_property(SDKCONFIG_DEFAULTS "${sdkconfig_defaults_checked}")
 endfunction()
 
 #[[
@@ -187,6 +224,13 @@ endfunction()
     4. Generate all output files (sdkconfig.h, sdkconfig.cmake, etc.)
 #]]
 function(__generate_sdkconfig)
+    # Re-resolve SDKCONFIG_DEFAULTS so that a value assigned to the
+    # SDKCONFIG_DEFAULTS variable after include(project.cmake) but before
+    # project() is honored. The helper is idempotent: it only re-reads when
+    # the SDKCONFIG_DEFAULTS variable (or environment variable) is set, and
+    # otherwise leaves a value accumulated on the build property untouched.
+    __resolve_sdkconfig_defaults()
+
     # Collect Kconfig files from discovered components
     __consolidate_component_kconfig_files()
 
@@ -207,6 +251,10 @@ function(__generate_sdkconfig)
 
     # Generate Kconfig outputs
     __generate_kconfig_outputs()
+
+    # Mirror CONFIG_* values onto build properties so
+    # `idf_build_get_property(var CONFIG_FOO)` keeps working.
+    __import_sdkconfig_as_build_properties()
 
     idf_msg("Generated sdkconfig configuration")
 endfunction()
@@ -806,7 +854,7 @@ endfunction()
 # KCONFIG TARGETS FUNCTIONS
 # =============================================================================
 
-#[[
+#[[api
 .. cmakev2:function:: idf_create_menuconfig
 
     .. code-block:: cmake
@@ -875,10 +923,12 @@ function(idf_create_menuconfig executable)
 
     if(_menuconfig_inline_ok)
         add_custom_target("${ARG_TARGET}"
+            # Ensure kconfig.in and kconfig_projbuild.in are present and up to date.
+            # This is not necessary under normal circumstances, but if the files are manually removed,
+            # it may be possible to regenerate them.
             COMMAND ${python} "${idf_path}/tools/kconfig_new/prepare_kconfig_files.py"
             --list-separator=semicolon
             --env-file "${config_env_dir}/config.env"
-            COMMAND ${python} "${idf_path}/tools/check_term.py"
             COMMAND ${CMAKE_COMMAND} -E env
             "COMPONENT_KCONFIGS_SOURCE_FILE=${config_env_dir}/kconfigs.in"
             "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE=${config_env_dir}/kconfigs_projbuild.in"
@@ -906,6 +956,9 @@ function(idf_create_menuconfig executable)
         message(WARNING "esp-idf-kconfig >= ${MENUCONFIG_INLINE_MIN_KCONFIG_VERSION} is required "
             "for the optimised menuconfig target. Please update your Python packages by re-running the install script.")
         add_custom_target("${ARG_TARGET}"
+            # Ensure kconfig.in and kconfig_projbuild.in are present and up to date.
+            # This is not necessary under normal circumstances, but if the files are manually removed,
+            # it may be possible to regenerate them.
             COMMAND ${python} "${idf_path}/tools/kconfig_new/prepare_kconfig_files.py"
             --list-separator=semicolon
             --env-file "${config_env_dir}/config.env"
@@ -918,7 +971,6 @@ function(idf_create_menuconfig executable)
             --dont-write-deprecated
             --output config "${sdkconfig}"
             --env-file "${config_env_dir}/config.env"
-            COMMAND ${python} "${idf_path}/tools/check_term.py"
             COMMAND ${CMAKE_COMMAND} -E env
             "COMPONENT_KCONFIGS_SOURCE_FILE=${config_env_dir}/kconfigs.in"
             "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE=${config_env_dir}/kconfigs_projbuild.in"
@@ -946,6 +998,97 @@ function(idf_create_menuconfig executable)
 endfunction()
 
 #[[
+.. cmakev2:function:: idf_register_menuconfig
+
+    .. code-block:: cmake
+
+        idf_register_menuconfig(NAME <human-label>
+                                TARGET <cmake-target>)
+
+    *NAME[in]*
+
+    Human-readable label shown in the dispatcher picker (e.g. ``"Main application"``,
+    ``"ULP (lp_core)"``).
+
+    *TARGET[in]*
+
+    Name of an existing CMake target that, when built, launches a menuconfig
+    session for some configuration. May be a target created by
+    ``idf_create_menuconfig`` or any other custom target (for example a proxy
+    target forwarding to a sub-project's ``menuconfig`` via
+    ``externalproject_add``).
+
+    Register a menuconfig target with the cmakev2 dispatcher. When exactly one
+    menuconfig is registered (the common case), ``idf.py menuconfig`` behaves
+    identically to today and runs that target directly. When two or more are
+    registered, ``idf.py menuconfig`` presents a small picker so the user can
+    choose which configuration to edit.
+#]]
+function(idf_register_menuconfig)
+    set(options)
+    set(one_value NAME TARGET)
+    set(multi_value)
+    cmake_parse_arguments(ARG "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
+    if(NOT DEFINED ARG_NAME)
+        idf_die("idf_register_menuconfig: NAME option is required")
+    endif()
+
+    if(NOT DEFINED ARG_TARGET)
+        idf_die("idf_register_menuconfig: TARGET option is required")
+    endif()
+
+    idf_build_get_property(names __MENUCONFIG_NAMES)
+    idf_build_get_property(targets __MENUCONFIG_TARGETS)
+    list(APPEND names "${ARG_NAME}")
+    list(APPEND targets "${ARG_TARGET}")
+    idf_build_set_property(__MENUCONFIG_NAMES "${names}")
+    idf_build_set_property(__MENUCONFIG_TARGETS "${targets}")
+endfunction()
+
+# Create the user-facing `menuconfig` target based on what has been registered
+# via idf_register_menuconfig(). With a single registration, `menuconfig` is a
+# thin alias for that target. With two or more, it runs the dispatcher.
+function(__finalize_menuconfig)
+    idf_build_get_property(names __MENUCONFIG_NAMES)
+    idf_build_get_property(targets __MENUCONFIG_TARGETS)
+    list(LENGTH names num_entries)
+
+    if(num_entries EQUAL 0)
+        return()
+    endif()
+
+    if(num_entries EQUAL 1)
+        list(GET targets 0 target)
+        add_custom_target(menuconfig)
+        add_dependencies(menuconfig ${target})
+        return()
+    endif()
+
+    # Two or more registrations: generate entries file and create dispatcher target
+    idf_build_get_property(build_dir BUILD_DIR)
+    idf_build_get_property(python PYTHON)
+    idf_build_get_property(idf_path IDF_PATH)
+
+    set(entries_file "${build_dir}/menuconfig_entries.txt")
+    set(content "")
+    math(EXPR last_idx "${num_entries} - 1")
+    foreach(i RANGE ${last_idx})
+        list(GET names ${i} name)
+        list(GET targets ${i} target)
+        string(APPEND content "${name}|${target}\n")
+    endforeach()
+    file(WRITE "${entries_file}" "${content}")
+
+    add_custom_target(menuconfig
+        COMMAND ${python} "${idf_path}/tools/kconfig_new/menuconfig_dispatcher.py"
+                "${entries_file}" "${build_dir}"
+        USES_TERMINAL
+        VERBATIM
+    )
+endfunction()
+
+#[[api
 .. cmakev2:function:: idf_create_confserver
 
     .. code-block:: cmake

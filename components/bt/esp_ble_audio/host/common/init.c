@@ -44,10 +44,17 @@
 #include <../host/conn_internal.h>
 #include <../host/hci_core.h>
 
+#include "utils/assert.h"
+#include "utils/mem.h"
+
 #if CONFIG_BT_BLUEDROID_ENABLED
 #include "bluedroid/init.h"
 #else
 #include "nimble/init.h"
+#endif
+
+#if CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT
+#include "ots/adapter/l2cap.h"
 #endif
 
 #include "../../../lib/include/audio.h"
@@ -68,10 +75,6 @@ _Static_assert(offsetof(struct bt_le_audio_start_info, csis_insts) ==
                offsetof(esp_ble_audio_start_info_t, csis_insts),
                "Mismatch LE Audio start info structure");
 #endif /* CONFIG_BT_CSIP_SET_MEMBER */
-
-#if CONFIG_BT_TBS
-_Static_assert(CONFIG_BT_TBS_BEARER_COUNT == 0, "Currently only support GTBS");
-#endif /* CONFIG_BT_TBS */
 
 #if CONFIG_BT_OTS && !CONFIG_BT_OTS_SECONDARY_SVC
 _Static_assert(0, "Currently only support using OTS as Secondary Service");
@@ -182,7 +185,7 @@ static const uint16_t ext_structs[] = {
     sizeof(struct bt_bond_info),
 };
 
-#define LEA_VERSION     (0x20260514)
+#define LEA_VERSION     (0x20260820)
 
 struct lib_ext_cfgs {
     /* BLE */
@@ -269,6 +272,7 @@ struct lib_ext_cfgs {
     bool     config_csip_set_member_enc_sirk_support;
     bool     config_csip_set_member_sirk_notifiable;
     bool     config_csip_set_member_size_notifiable;
+    bool     config_csip_set_member_set_name_notifiable;
     bool     config_csip_set_member_test_sample_data;
     bool     config_csip_set_coordinator;
     uint8_t  config_csip_set_coordinator_max_csis_instances;
@@ -294,6 +298,7 @@ struct lib_ext_cfgs {
 
     /* MCS (Media Control Service) */
     bool     config_mcs;
+    uint8_t  config_mcs_instance_count;
     bool     config_mcc;
     uint8_t  config_mcc_media_player_name_max;
     uint8_t  config_mcc_icon_url_max;
@@ -401,6 +406,7 @@ struct lib_ext_cfgs {
     bool     config_tbs_client_call_friendly_name;
     uint8_t  config_tbs_max_uri_length;
     uint16_t config_tbs_max_provider_name_length;
+    uint16_t config_tbs_max_friendly_name_length;
 
     /* TMAP (Telephony and Media Audio Profile) */
     bool     config_tmap_cg_supported;
@@ -435,6 +441,9 @@ struct lib_ext_cfgs {
     bool     config_ots;
     bool     config_ots_client;
     uint8_t  config_ots_obj_max_name_len;
+
+    /* PTS */
+    bool     config_pts_test_enable;
 
     /* Version Check */
     uint32_t config_version;
@@ -591,6 +600,9 @@ static const struct lib_ext_cfgs ext_cfgs = {
 #if CONFIG_BT_CSIP_SET_MEMBER_SIZE_NOTIFIABLE
     .config_csip_set_member_size_notifiable = CONFIG_BT_CSIP_SET_MEMBER_SIZE_NOTIFIABLE,
 #endif /* CONFIG_BT_CSIP_SET_MEMBER_SIZE_NOTIFIABLE */
+#if CONFIG_BT_CSIP_SET_MEMBER_SET_NAME_NOTIFIABLE
+    .config_csip_set_member_set_name_notifiable = CONFIG_BT_CSIP_SET_MEMBER_SET_NAME_NOTIFIABLE,
+#endif /* CONFIG_BT_CSIP_SET_MEMBER_SET_NAME_NOTIFIABLE */
 #if CONFIG_BT_CSIP_SET_MEMBER_TEST_SAMPLE_DATA
     .config_csip_set_member_test_sample_data = CONFIG_BT_CSIP_SET_MEMBER_TEST_SAMPLE_DATA,
 #endif /* CONFIG_BT_CSIP_SET_MEMBER_TEST_SAMPLE_DATA */
@@ -648,6 +660,7 @@ static const struct lib_ext_cfgs ext_cfgs = {
     /* MCS (Media Control Service) */
 #if CONFIG_BT_MCS
     .config_mcs = CONFIG_BT_MCS,
+    .config_mcs_instance_count = CONFIG_BT_MCS_INSTANCE_COUNT,
 #endif /* CONFIG_BT_MCS */
 #if CONFIG_BT_MCC
     .config_mcc = CONFIG_BT_MCC,
@@ -893,6 +906,7 @@ static const struct lib_ext_cfgs ext_cfgs = {
 #if CONFIG_BT_TBS || CONFIG_BT_TBS_CLIENT
     .config_tbs_max_uri_length = CONFIG_BT_TBS_MAX_URI_LENGTH,
     .config_tbs_max_provider_name_length = CONFIG_BT_TBS_MAX_PROVIDER_NAME_LENGTH,
+    .config_tbs_max_friendly_name_length = CONFIG_BT_TBS_MAX_FRIENDLY_NAME_LENGTH,
 #endif /* CONFIG_BT_TBS || CONFIG_BT_TBS_CLIENT */
 
     /* TMAP (Telephony and Media Audio Profile) */
@@ -966,6 +980,9 @@ static const struct lib_ext_cfgs ext_cfgs = {
 #if CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT
     .config_ots_obj_max_name_len = CONFIG_BT_OTS_OBJ_MAX_NAME_LEN,
 #endif /* CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT */
+
+    /* PTS test mode: gates PTS-only changes. Set true only for PTS builds. */
+    .config_pts_test_enable = false,
 
     .config_version = LEA_VERSION,
 };
@@ -1083,6 +1100,7 @@ struct lib_ext_funcs {
                           void *data);
     int (*_conn_get_info)(const struct bt_conn *conn, struct bt_conn_info *info);
     uint8_t (*_conn_index)(const struct bt_conn *conn);
+    struct bt_conn *(*_conn_lookup_index)(uint8_t index);
     const bt_addr_le_t *(*_conn_get_dst)(const struct bt_conn *conn);
     struct bt_conn *(*_conn_ref)(struct bt_conn *conn);
     void (*_conn_unref)(struct bt_conn *conn);
@@ -1192,32 +1210,21 @@ static void log_error(const char *format, ...)
 #endif /* (CONFIG_BT_AUDIO_LOG_LEVEL >= BT_ISO_LOG_ERROR) */
 }
 
-/* Fatal assert handler registered into lib_ext_funcs._assert.
- * Always logged (no LOG_LEVEL gate) — this is the last message before
- * abort, and the user needs the context to diagnose.
- */
-static void assert_fatal(const char *tag, size_t info,
-                         const char *file, int line, const char *func)
-{
-    esp_log_write(ESP_LOG_ERROR, LEA_TAG,
-                  BT_ISO_LOG_COLOR_E
-                  "E (%lu) %s: LibAssert[%s][info=%u][%s:%d][%s]"
-                  BT_ISO_LOG_RESET_COLOR "\n",
-                  esp_log_timestamp(), LEA_TAG,
-                  tag, (unsigned)info, file, line, func);
-    abort();
-}
-
 static const struct lib_ext_funcs ext_funcs = {
     ._log_dbg = (void *)log_debug,
     ._log_inf = (void *)log_info,
     ._log_wrn = (void *)log_warn,
     ._log_err = (void *)log_error,
 
-    ._assert = (void *)assert_fatal,
+    ._assert = (void *)bt_le_assert,
 
+#if CONFIG_BT_AUDIO_HEAP_EXTERNAL_MEMORY
+    ._malloc = (void *)bt_le_ext_malloc,
+    ._calloc = (void *)bt_le_ext_calloc,
+#else
     ._malloc = (void *)malloc,
     ._calloc = (void *)calloc,
+#endif
     ._free = (void *)free,
 
     ._rand = (void *)bt_rand,
@@ -1299,9 +1306,8 @@ static const struct lib_ext_funcs ext_funcs = {
     ._conn_foreach = (void *)bt_conn_foreach,
     ._conn_get_info = (void *)bt_conn_get_info,
     ._conn_index = (void *)bt_conn_index,
+    ._conn_lookup_index = (void *)bt_conn_lookup_index,
     ._conn_get_dst = (void *)bt_conn_get_dst,
-    ._conn_ref = (void *)bt_conn_ref,
-    ._conn_unref = (void *)bt_conn_unref,
 
     ._gatt_svc_register = (void *)bt_gatt_service_register,
     ._gatt_svc_unregister = (void *)bt_gatt_service_unregister,
@@ -1341,7 +1347,7 @@ static const struct lib_ext_funcs ext_funcs = {
 #endif /* CONFIG_BT_OTS_CLIENT */
 };
 
-struct lib_funcs {
+struct lib_int_funcs {
     /* AICS Client */
     int (*_aics_client_state_get)(struct bt_aics *inst);
     int (*_aics_client_gain_setting_get)(struct bt_aics *inst);
@@ -1363,6 +1369,7 @@ struct lib_funcs {
 
     /* BAP Unicast Client */
     bool (*_bap_unicast_client_has_ep)(const struct bt_bap_ep *ep);
+    struct bt_conn *(*_bap_unicast_client_ep_get_conn)(const struct bt_bap_ep *ep);
     int (*_bap_unicast_client_register_cb)(struct bt_bap_unicast_client_cb *cb);
     int (*_bap_unicast_client_config)(struct bt_bap_stream *stream,
                                       const struct bt_audio_codec_cfg *codec_cfg);
@@ -1375,6 +1382,7 @@ struct lib_funcs {
 
     /* BAP Unicast Server */
     bool (*_bap_unicast_server_has_ep)(const struct bt_bap_ep *ep);
+    struct bt_conn *(*_bap_unicast_server_ep_get_conn)(const struct bt_bap_ep *ep);
     int (*_bap_unicast_server_reconfig)(struct bt_bap_stream *stream,
                                         const struct bt_audio_codec_cfg *codec_cfg);
     int (*_bap_unicast_server_start)(struct bt_bap_stream *stream);
@@ -1407,11 +1415,11 @@ struct lib_funcs {
     /* CAP Handover */
     bool (*_cap_common_handover_is_active)(void);
     bool (*_cap_handover_is_handover_broadcast_source)(const struct bt_cap_broadcast_source *cap_broadcast_source);
-    void (*_cap_handover_complete)(void);
-    void (*_cap_handover_unicast_proc_complete)(void);
+    void (*_cap_handover_complete)(struct bt_cap_common_proc *active_proc);
+    void (*_cap_handover_unicast_proc_complete)(struct bt_cap_common_proc *active_proc);
     void (*_cap_handover_broadcast_source_stopped)(uint8_t reason);
     void (*_cap_handover_unicast_to_broadcast_reception_start)(void);
-    int (*_cap_handover_broadcast_reception_stopped)(void);
+    int (*_cap_handover_broadcast_reception_stopped)(struct bt_cap_common_proc *active_proc);
     void (*_cap_handover_receive_state_updated)(const struct bt_conn *conn,
                                                 const struct bt_bap_scan_delegator_recv_state *state);
 
@@ -1503,6 +1511,8 @@ struct lib_funcs {
     int (*_tbs_client_primary_discover_gtbs)(struct bt_conn *conn);
     struct bt_tbs_instance *(*_tbs_client_get_by_ccid)(const struct bt_conn *conn,
                                                        uint8_t ccid);
+    struct bt_tbs_instance *(*_tbs_client_get_by_index)(const struct bt_conn *conn,
+                                                        uint8_t index);
 
     /* VCP Volume Controller */
     void (*_vcp_vol_ctlr_aics_init)(void);
@@ -1526,7 +1536,7 @@ struct lib_funcs {
     int (*_vocs_client_description_set)(struct bt_vocs_client *inst, const char *description);
 };
 
-static const struct lib_funcs lib_funcs = {
+static const struct lib_int_funcs int_funcs = {
 #if CONFIG_BT_AICS_CLIENT
     ._aics_client_state_get = lib_aics_client_state_get,
     ._aics_client_gain_setting_get = lib_aics_client_gain_setting_get,
@@ -1551,6 +1561,7 @@ static const struct lib_funcs lib_funcs = {
 
 #if CONFIG_BT_BAP_UNICAST_CLIENT
     ._bap_unicast_client_has_ep = lib_bap_unicast_client_has_ep,
+    ._bap_unicast_client_ep_get_conn = lib_bap_unicast_client_ep_get_conn,
     ._bap_unicast_client_register_cb = lib_bap_unicast_client_register_cb,
     ._bap_unicast_client_config = lib_bap_unicast_client_config,
     ._bap_unicast_client_metadata = lib_bap_unicast_client_metadata,
@@ -1562,6 +1573,7 @@ static const struct lib_funcs lib_funcs = {
 
 #if CONFIG_BT_BAP_UNICAST_SERVER
     ._bap_unicast_server_has_ep = lib_bap_unicast_server_has_ep,
+    ._bap_unicast_server_ep_get_conn = lib_bap_unicast_server_ep_get_conn,
     ._bap_unicast_server_reconfig = lib_bap_unicast_server_reconfig,
     ._bap_unicast_server_start = lib_bap_unicast_server_start,
     ._bap_unicast_server_metadata = lib_bap_unicast_server_metadata,
@@ -1697,6 +1709,10 @@ static const struct lib_funcs lib_funcs = {
     ._tbs_client_get_by_ccid = lib_tbs_client_get_by_ccid,
 #endif /* CONFIG_BT_TBS_CLIENT_CCID */
 
+#if CONFIG_BT_TBS_CLIENT
+    ._tbs_client_get_by_index = lib_tbs_client_get_by_index,
+#endif /* CONFIG_BT_TBS_CLIENT */
+
 #if CONFIG_BT_VCP_VOL_CTLR_AICS
     ._vcp_vol_ctlr_aics_init = lib_vcp_vol_ctlr_aics_init,
 #endif /* CONFIG_BT_VCP_VOL_CTLR_AICS */
@@ -1728,7 +1744,7 @@ static const struct lib_funcs lib_funcs = {
 #endif /* CONFIG_BT_VOCS_CLIENT */
 };
 
-static int lib_resources_init(void)
+static int lib_audio_resources_init(void)
 {
     int err = 0;
 
@@ -2063,42 +2079,68 @@ int bt_le_audio_init(void)
 {
     int err;
 
-    err = lib_ext_structs_check(ext_structs, sizeof(ext_structs));
+    err = lib_audio_ext_structs_check(ext_structs, sizeof(ext_structs));
     if (err) {
         LOG_ERR("LibExtStructsCheckFail");
         return err;
     }
 
-    err = lib_ext_cfgs_set(&ext_cfgs, sizeof(ext_cfgs));
+    err = lib_audio_ext_cfgs_set(&ext_cfgs, sizeof(ext_cfgs));
     if (err) {
         LOG_ERR("LibExtCfgsSetFail");
         return err;
     }
 
-    err = lib_ext_funcs_set(&ext_funcs, sizeof(ext_funcs));
+    err = lib_audio_ext_funcs_set(&ext_funcs, sizeof(ext_funcs));
     if (err) {
         LOG_ERR("LibExtFuncsSetFail");
         return err;
     }
 
-    err = lib_funcs_set(&lib_funcs, sizeof(lib_funcs));
+    err = lib_audio_int_funcs_set(&int_funcs, sizeof(int_funcs));
     if (err) {
-        LOG_ERR("LibFuncsSetFail");
+        LOG_ERR("LibIntFuncsSetFail");
         return err;
     }
 
-    printf(BT_ISO_LOG_COLOR_I "BLE Audio lib commit: [%s]" \
-           BT_ISO_LOG_RESET_COLOR "\n", lib_ext_commit_get());
+    esp_log_write(ESP_LOG_INFO, LEA_TAG,
+                  BT_ISO_LOG_COLOR_I
+                  "I (%lu) %s: BLE Audio lib commit: [%s]"
+                  BT_ISO_LOG_RESET_COLOR "\n",
+                  esp_log_timestamp(), LEA_TAG,
+                  lib_audio_commit_get());
 
-    err = lib_resources_init();
+    err = lib_audio_resources_init();
     if (err) {
         return err;
     }
+
+#if CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT
+    err = bt_le_l2cap_ots_init();
+    if (err) {
+        return err;
+    }
+#endif
 
 #if CONFIG_BT_BLUEDROID_ENABLED
-    return bt_le_bluedroid_audio_init();
+    err = bt_le_bluedroid_audio_init();
 #else
-    return bt_le_nimble_audio_init();
+    err = bt_le_nimble_audio_init();
+#endif
+    if (err) {
+#if CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT
+        bt_le_l2cap_ots_deinit();
+#endif
+        return err;
+    }
+
+    return 0;
+}
+
+void bt_le_audio_deinit(void)
+{
+#if CONFIG_BT_OTS || CONFIG_BT_OTS_CLIENT
+    bt_le_l2cap_ots_deinit();
 #endif
 }
 
@@ -2151,6 +2193,17 @@ int bt_le_gtbs_init(void)
     return bt_le_bluedroid_gtbs_init();
 #else
     return bt_le_nimble_gtbs_init();
+#endif
+}
+
+int bt_le_tbs_init(void)
+{
+    LOG_DBG("TbsInit");
+
+#if CONFIG_BT_BLUEDROID_ENABLED
+    return bt_le_bluedroid_tbs_init();
+#else
+    return bt_le_nimble_tbs_init();
 #endif
 }
 #endif /* CONFIG_BT_TBS */
@@ -2219,7 +2272,7 @@ int bt_le_audio_start(void *info)
 #endif
 }
 
-void ble_audio_lib_compressed_out(uint8_t log_level, uint32_t log_index, size_t arg_cnt, ...)
+void bt_le_audio_lib_compressed_out(uint8_t log_level, uint32_t log_index, size_t arg_cnt, ...)
 {
 #if CONFIG_BLE_ISO_COMPRESSED_LOG_ENABLE
     if (CONFIG_BT_ISO_LOG_LEVEL >= log_level) {
@@ -2232,14 +2285,14 @@ void ble_audio_lib_compressed_out(uint8_t log_level, uint32_t log_index, size_t 
         va_end(args);
     }
 #else
-    (void)log_level;
-    (void)log_index;
-    (void)arg_cnt;
+    ARG_UNUSED(log_level);
+    ARG_UNUSED(log_index);
+    ARG_UNUSED(arg_cnt);
 #endif
 }
 
-void ble_audio_lib_compressed_buf_out(uint8_t log_level, uint32_t log_index, uint8_t buf_idx,
-                                      const uint8_t *buf, size_t len)
+void bt_le_audio_lib_compressed_buf_out(uint8_t log_level, uint32_t log_index, uint8_t buf_idx,
+                                        const uint8_t *buf, size_t len)
 {
 #if CONFIG_BLE_ISO_COMPRESSED_LOG_ENABLE
     if (CONFIG_BT_ISO_LOG_LEVEL >= log_level) {
@@ -2250,10 +2303,10 @@ void ble_audio_lib_compressed_buf_out(uint8_t log_level, uint32_t log_index, uin
                                          log_index, buf_idx, buf, len);
     }
 #else
-    (void)log_level;
-    (void)log_index;
-    (void)buf_idx;
-    (void)buf;
-    (void)len;
+    ARG_UNUSED(log_level);
+    ARG_UNUSED(log_index);
+    ARG_UNUSED(buf_idx);
+    ARG_UNUSED(buf);
+    ARG_UNUSED(len);
 #endif
 }

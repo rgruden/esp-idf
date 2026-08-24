@@ -287,6 +287,9 @@ typedef struct bt_iso_tx_cb_info            esp_ble_iso_tx_cb_info_t;
 /** Extended advertising information structure */
 typedef struct {
     uint8_t adv_handle; /*!< Handle for the advertising set */
+    uint8_t addr_type;  /*!< Advertising address type (0=public, 1=random) */
+    uint8_t addr[6];    /*!< Advertising address */
+    uint8_t sid;        /*!< Advertising SID */
 } esp_ble_iso_ext_adv_info_t;
 
 /**
@@ -580,7 +583,7 @@ typedef struct {
  * @param   type    Event type.
  * @param   param   Event parameters.
  */
-void esp_ble_iso_gap_app_post_event(uint8_t type, void *param);
+void esp_ble_iso_gap_app_post_event(uint16_t type, void *param);
 
 /**
  * @brief   Initialize ISO common functionality.

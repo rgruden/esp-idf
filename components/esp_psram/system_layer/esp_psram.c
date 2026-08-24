@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "esp_heap_caps_init.h"
 #include "esp_psram.h"
+#include "esp_macros.h"
 #include "esp_mmu_map.h"
 #include "hal/mmu_hal.h"
 #include "hal/mmu_ll.h"
@@ -86,8 +87,6 @@ extern uint8_t _ext_ram_bss_end;
 extern uint8_t _ext_ram_noinit_start;
 extern uint8_t _ext_ram_noinit_end;
 #endif  //#if CONFIG_SPIRAM_ALLOW_NOINIT_SEG_EXTERNAL_MEMORY
-
-#define ALIGN_UP_BY(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
 
 typedef struct {
     intptr_t vaddr_start;
@@ -290,7 +289,7 @@ static void s_psram_mapping(uint32_t psram_available_size, uint32_t start_page)
 {
     esp_err_t ret = ESP_FAIL;
 #if CONFIG_SPIRAM_ENC_EXEMPT
-    size_t enc_exempt_size = ALIGN_UP_BY((size_t)CONFIG_SPIRAM_ENC_EXEMPT_SIZE * 1024, MMU_PAGE_SIZE);
+    size_t enc_exempt_size = ESP_ALIGN_UP((size_t)CONFIG_SPIRAM_ENC_EXEMPT_SIZE * 1024, MMU_PAGE_SIZE);
     if (enc_exempt_size >= psram_available_size) {
         ESP_EARLY_LOGE(TAG, "SPIRAM_ENC_EXEMPT_SIZE (%dKB) >= available PSRAM (%dKB); disabling carve-out",
                        (int)(enc_exempt_size / 1024), (int)(psram_available_size / 1024));
@@ -461,6 +460,10 @@ esp_err_t esp_psram_chip_init(void)
 
 esp_err_t esp_psram_init(void)
 {
+    if (s_psram_ctx.is_initialised) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
     esp_err_t ret = ESP_FAIL;
 
     if (!s_psram_ctx.is_chip_initialised) {
@@ -661,7 +664,7 @@ esp_err_t esp_psram_extram_reserve_dma_pool(size_t size)
             return ESP_ERR_NO_MEM;
         }
 
-        uint32_t caps[] = {0, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, MALLOC_CAP_8BIT | MALLOC_CAP_32BIT};
+        uint32_t caps[] = {0, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT | MALLOC_CAP_8BIT | MALLOC_CAP_32BIT};
         esp_err_t e = heap_caps_add_region_with_caps(caps, (intptr_t)dma_heap, (intptr_t)dma_heap + next_size - 1);
         if (e != ESP_OK) {
             return e;

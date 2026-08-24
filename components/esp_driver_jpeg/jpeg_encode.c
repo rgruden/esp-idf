@@ -19,6 +19,7 @@
 #include "hal/jpeg_ll.h"
 #include "hal/cache_hal.h"
 #include "hal/cache_ll.h"
+#include "hal/hal_utils.h"
 #include "esp_private/dma2d.h"
 #include "jpeg_private.h"
 #include "driver/jpeg_encode.h"
@@ -113,7 +114,7 @@ esp_err_t jpeg_new_encoder_engine(const jpeg_encode_engine_cfg_t *enc_eng_cfg, j
 
     uint32_t cache_line_size = cache_hal_get_cache_line_size(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_DATA);
     uint32_t alignment = cache_line_size;
-    size_t dma_desc_mem_size = JPEG_ALIGN_UP(sizeof(dma2d_descriptor_t), cache_line_size);
+    size_t dma_desc_mem_size = ESP_ALIGN_UP(sizeof(dma2d_descriptor_t), cache_line_size);
 
     encoder_engine->rxlink = (dma2d_descriptor_t*)heap_caps_aligned_calloc(alignment, 1, dma_desc_mem_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | JPEG_MEM_ALLOC_CAPS);
     ESP_GOTO_ON_FALSE(encoder_engine->rxlink, ESP_ERR_NO_MEM, err, TAG, "no memory for jpeg encoder rxlink");
@@ -175,6 +176,11 @@ esp_err_t jpeg_encoder_process(jpeg_encoder_handle_t encoder_engine, const jpeg_
     ESP_RETURN_ON_FALSE(bit_stream, ESP_ERR_INVALID_ARG, TAG, "jpeg encode output buffer is null");
     ESP_RETURN_ON_FALSE(out_size, ESP_ERR_INVALID_ARG, TAG, "jpeg encode picture out_size is null");
     ESP_RETURN_ON_FALSE(((uintptr_t)bit_stream % cache_hal_get_cache_line_size(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_DATA)) == 0, ESP_ERR_INVALID_ARG, TAG, "jpeg encode bit stream is not aligned, please use jpeg_alloc_encoder_mem to malloc your buffer");
+    // both the input picture and output bitstream are accessed by the 2D-DMA
+    size_t encode_inbuf_alignment = dma2d_get_buffer_alignment_constraint(encode_inbuf);
+    size_t bit_stream_alignment = dma2d_get_buffer_alignment_constraint(bit_stream);
+    ESP_RETURN_ON_FALSE(encode_inbuf_alignment <= 1 && bit_stream_alignment <= 1, ESP_ERR_INVALID_ARG, TAG,
+                        "jpeg encode buffer doesn't satisfy DMA2D alignment constraints, please use jpeg_alloc_encoder_mem to malloc your buffer");
 
     esp_err_t ret = ESP_OK;
 
@@ -322,7 +328,7 @@ esp_err_t jpeg_encoder_process(jpeg_encoder_handle_t encoder_engine, const jpeg_
                 ESP_GOTO_ON_ERROR(esp_cache_msync((void*)encoder_engine->rxlink, encoder_engine->dma_desc_size, ESP_CACHE_MSYNC_FLAG_DIR_M2C), err1, TAG, "sync memory to cache failed");
             }
             compressed_size = s_dma_desc_get_len(encoder_engine->rxlink);
-            uint32_t _compressed_size = JPEG_ALIGN_UP(compressed_size, cache_hal_get_cache_line_size(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_DATA));
+            uint32_t _compressed_size = ESP_ALIGN_UP(compressed_size, cache_hal_get_cache_line_size(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_DATA));
             cache_line_size = esp_cache_get_line_size_by_addr(bit_stream + encoder_engine->header_info->header_len);
             if (cache_line_size > 0) {
                 ESP_GOTO_ON_ERROR(esp_cache_msync((void*)(bit_stream + encoder_engine->header_info->header_len), _compressed_size, ESP_CACHE_MSYNC_FLAG_DIR_M2C), err1, TAG, "sync memory to cache failed");
@@ -343,7 +349,14 @@ esp_err_t jpeg_encoder_process(jpeg_encoder_handle_t encoder_engine, const jpeg_
     return ESP_OK;
 
 err1:
-    dma2d_force_end(encoder_engine->trans_desc, &need_yield);
+    // The transaction may still be pending in the pool queue (never picked up), so try to dequeue it first.
+    // Dequeuing is atomic against the pick that turns a pending transaction into an in-flight one, so if the
+    // transaction is no longer in the queue, it is already in-flight and we force end it instead.
+    if (dma2d_dequeue(encoder_engine->dma2d_group_handle, encoder_engine->trans_desc) != ESP_OK) {
+        if (dma2d_force_end(encoder_engine->trans_desc, &need_yield) != ESP_OK) {
+            ESP_LOGE(TAG, "failed to end the transaction, it is neither pending nor in-flight");
+        }
+    }
 err2:
     xSemaphoreGive(encoder_engine->codec_base->codec_mutex);
 #if CONFIG_PM_ENABLE
@@ -394,15 +407,21 @@ void *jpeg_alloc_encoder_mem(size_t size, const jpeg_encode_memory_alloc_cfg_t *
        For input buffer(for decoder is PSRAM write to 2DDMA), no restriction for any align (both cache writeback and requirement from 2DDMA).
     */
     size_t cache_align = 0;
+    size_t buffer_align = 0;
     esp_cache_get_alignment(MALLOC_CAP_SPIRAM, &cache_align);
-    if (mem_cfg->buffer_direction == JPEG_ENC_ALLOC_OUTPUT_BUFFER) {
-        size = JPEG_ALIGN_UP(size, cache_align);
-        *allocated_size = size;
-        return heap_caps_aligned_calloc(cache_align, 1, size, MALLOC_CAP_SPIRAM);
-    } else {
-        *allocated_size = size;
-        return heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM);
+    buffer_align = MAX(cache_align, JPEG_DMA2D_BUFFER_ALIGN);
+    size = ESP_ALIGN_UP(size, buffer_align);
+    *allocated_size = size;
+    // To simplify the logic, we always use the LCM of cache and 2D-DMA alignment to satisfy both requirements
+    void *buffer = heap_caps_aligned_calloc(buffer_align, 1, size, JPEG_SPIRAM_ALLOC_CAPS);
+    if (buffer == NULL) {
+#if CONFIG_SPIRAM_ENC_EXEMPT
+        ESP_LOGE(TAG, "no mem for %zu bytes encode buffer in unencrypted PSRAM, please enlarge CONFIG_SPIRAM_ENC_EXEMPT_SIZE", size);
+#else
+        ESP_LOGE(TAG, "no mem for %zu bytes encode buffer", size);
+#endif
     }
+    return buffer;
 }
 
 /****************************************************************

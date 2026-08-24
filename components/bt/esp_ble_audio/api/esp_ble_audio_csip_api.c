@@ -101,6 +101,24 @@ esp_err_t esp_ble_audio_csip_set_member_set_size_and_rank(esp_ble_audio_csip_set
     return ESP_OK;
 }
 
+esp_err_t esp_ble_audio_csip_set_member_set_name(esp_ble_audio_csip_set_member_svc_inst_t *svc_inst,
+                                                 const uint8_t *name, uint8_t len)
+{
+    int err;
+
+    if (svc_inst == NULL || len > ESP_BLE_AUDIO_CSIP_SET_NAME_MAX_LEN ||
+            (len > 0 && name == NULL)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = bt_csip_set_member_set_name_safe(svc_inst, name, len);
+    if (err) {
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t esp_ble_audio_csip_set_member_get_info(const esp_ble_audio_csip_set_member_svc_inst_t *svc_inst,
                                                  esp_ble_audio_csip_set_member_set_info_t *info)
 {
@@ -258,7 +276,7 @@ esp_err_t esp_ble_audio_csip_set_coordinator_lock(const esp_ble_audio_csip_set_c
 {
     int err;
 
-    if (members == NULL || count > CONFIG_BT_MAX_CONN || set_info == NULL) {
+    if (members == NULL || count == 0 || count > CONFIG_BT_MAX_CONN || set_info == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -276,7 +294,7 @@ esp_err_t esp_ble_audio_csip_set_coordinator_release(const esp_ble_audio_csip_se
 {
     int err;
 
-    if (members == NULL || count > CONFIG_BT_MAX_CONN || set_info == NULL) {
+    if (members == NULL || count == 0 || count > CONFIG_BT_MAX_CONN || set_info == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 

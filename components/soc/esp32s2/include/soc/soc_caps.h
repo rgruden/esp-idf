@@ -262,6 +262,7 @@
 #define SOC_SPI_SUPPORT_SLAVE_HD_VER2       1
 #define SOC_SPI_HD_BOTH_INOUT_SUPPORTED     1   //Support enabling MOSI and MISO phases together under Halfduplex mode
 #define SOC_SPI_SUPPORT_OCT                 1
+#define SOC_SPI_SUPPORT_DDR_CLOCK           1
 
 // Peripheral supports output given level during its "dummy phase"
 // Only SPI1 supports this feature
@@ -430,7 +431,6 @@
 // No contents
 
 /*-------------------------- EXTERNAL COEXISTENCE CAPS -------------------------------------*/
-#define SOC_EXTERNAL_COEX_ADVANCE              (0) /*!< HARDWARE ADVANCED EXTERNAL COEXISTENCE CAPS */
 #define SOC_EXTERNAL_COEX_LEADER_TX_LINE       (1) /*!< EXTERNAL COEXISTENCE TX LINE CAPS */
 
 /*-------------------------- Temperature Sensor CAPS -------------------------------------*/

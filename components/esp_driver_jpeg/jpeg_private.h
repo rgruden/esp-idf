@@ -8,7 +8,8 @@
 
 #include <stdint.h>
 #include <stdatomic.h>
-#include "sys/queue.h"
+#include <sys/queue.h>
+#include "esp_macros.h"
 #include "esp_private/dma2d.h"
 #include "driver/jpeg_types.h"
 #include "freertos/FreeRTOS.h"
@@ -18,6 +19,10 @@
 #include "esp_intr_types.h"
 #include "esp_pm.h"
 #include "sdkconfig.h"
+#if SOC_PAU_SUPPORTED
+#include "soc/regdma.h"
+#include "soc/retention_periph_defs.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,7 +35,17 @@ extern "C" {
 // JPEG encoder and decoder shares same interrupt ID.
 #define JPEG_INTR_ALLOC_FLAG              (ESP_INTR_FLAG_SHARED)
 
-#define JPEG_ALIGN_UP(num, align)         (((num) + ((align) - 1)) & ~((align) - 1))
+// Buffers fed to the 2D-DMA must be at least 16-byte aligned.
+#define JPEG_DMA2D_BUFFER_ALIGN           16
+
+// The JPEG codec cannot work with encrypted buffer, because it deals with macro block. When an
+// unencrypted PSRAM region is reserved (CONFIG_SPIRAM_ENC_EXEMPT), codec buffers
+// must come from it; otherwise use normal PSRAM.
+#if CONFIG_SPIRAM_ENC_EXEMPT
+#define JPEG_SPIRAM_ALLOC_CAPS            (MALLOC_CAP_SPIRAM_NO_ENC)
+#else
+#define JPEG_SPIRAM_ALLOC_CAPS            (MALLOC_CAP_SPIRAM)
+#endif
 
 // Use retention link only when the target supports sleep retention and PM is enabled
 #define JPEG_USE_RETENTION_LINK  (CONFIG_PM_ENABLE && CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP)
@@ -60,6 +75,16 @@ struct jpeg_codec_t {
 #endif
     bool retention_link_created;     // mark if the retention link is created.
 };
+
+#if SOC_PAU_SUPPORTED
+typedef struct {
+    const regdma_entries_config_t *entry_array;
+    uint32_t array_size;
+    periph_retention_module_t module_id;
+} jpeg_reg_retention_info_t;
+
+extern const jpeg_reg_retention_info_t jpeg_reg_retention_info;
+#endif
 
 typedef enum {
     JPEG_DEC_DIRECT_OUTPUT_HB = 0, /*!< Direct output */
